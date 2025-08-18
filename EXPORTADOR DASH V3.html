@@ -35,17 +35,12 @@
                 <label for="history-file-input" class="file-input-label">4. Histórico de Vendas (Trimestre Anterior)</label>
                 <input type="file" id="history-file-input" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600" accept=".csv, .xls, .xlsx"/>
             </div>
-             <div>
-                <label for="stock-file-input" class="file-input-label">5. Arquivo de Estoque (com abas 05 e 08)</label>
-                <input type="file" id="stock-file-input" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600" accept=".xls, .xlsx"/>
-            </div>
-        </div>
+             </div>
         
         <button id="generate-btn" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg w-full disabled:bg-slate-600" disabled>
             Gerar Relatório
         </button>
 
-        <!-- Status e Barra de Progresso -->
         <div id="status-container" class="hidden mt-6 text-sm h-12 flex flex-col justify-center">
             <p id="status-text" class="mb-2"></p>
             <div class="progress-bar-container w-full h-2">
@@ -60,7 +55,6 @@
         </div>
     </div>
 
-    <!-- O CÓDIGO DO WORKER FICA AQUI DENTRO. A PÁGINA PRINCIPAL IRÁ LÊ-LO E INICIÁ-LO. -->
     <script id="worker-script" type="text/worker-javascript">
         // Importa a biblioteca para ler arquivos XLSX
         self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
@@ -117,7 +111,7 @@
                             let decodedData;
                             try {
                                 decodedData = new TextDecoder('utf-8').decode(new Uint8Array(data));
-                                if (decodedData.includes(' ')) { 
+                                if (decodedData.includes('')) { 
                                     throw new Error('UTF-8 decoding failed, trying ISO-8859-1');
                                 }
                             } catch (e) {
@@ -158,46 +152,10 @@
             });
         };
 
-        // Função para ler o arquivo de estoque com múltiplas abas
-        const readStockFile = (file) => {
-            return new Promise((resolve, reject) => {
-                if (!file) {
-                    resolve({ stockData05: [], stockData08: [] });
-                    return;
-                }
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const data = event.target.result;
-                        const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
-
-                        const sheetName05 = workbook.SheetNames.find(name => name.includes('05'));
-                        const sheetName08 = workbook.SheetNames.find(name => name.includes('08'));
-
-                        if (!sheetName05 || !sheetName08) {
-                            throw new Error('Não foi possível encontrar as abas de estoque "05" e "08" no arquivo.');
-                        }
-
-                        const worksheet05 = workbook.Sheets[sheetName05];
-                        const worksheet08 = workbook.Sheets[sheetName08];
-
-                        const stockData05 = XLSX.utils.sheet_to_json(worksheet05, { raw: false, cellDates: true });
-                        const stockData08 = XLSX.utils.sheet_to_json(worksheet08, { raw: false, cellDates: true });
-
-                        resolve({ stockData05, stockData08 });
-                    } catch (error) {
-                        reject(error);
-                    }
-                };
-                reader.onerror = () => reject(new Error(`Erro ao ler o arquivo de estoque '${file.name}'.`));
-                reader.readAsArrayBuffer(file);
-            });
-        };
-        
         // Função principal de processamento de dados de vendas (executada dentro do worker)
         const processSalesData = (rawData, clientMap, productMasterMap) => {
             return rawData.map(rawRow => {
-                const clientInfo = clientMap.get(String(rawRow['CODCLI'])) || {};
+                const clientInfo = clientMap.get(String(rawRow['CODCLI']).trim()) || {};
                 let vendorName = String(rawRow['NOME'] || '');
                 let supervisorName = String(rawRow['SUPERV'] || '');
                 let codUsur = String(rawRow['CODUSUR'] || '');
@@ -215,18 +173,21 @@
                 if (parsedDtPed && parsedDtSaida && (parsedDtPed.getFullYear() < parsedDtSaida.getFullYear() || (parsedDtPed.getFullYear() === parsedDtSaida.getFullYear() && parsedDtPed.getMonth() < parsedDtSaida.getMonth()))) {
                     dtPed = dtSaida;
                 }
-                const productCode = String(rawRow['PRODUTO'] || '');
+                const productCode = String(rawRow['PRODUTO'] || '').trim();
                 const qtdeMaster = productMasterMap.get(productCode) || 1;
                 const qtVenda = parseInt(String(rawRow['QTVENDA'] || '0').trim(), 10);
                 return {
                     PEDIDO: pedido, NOME: vendorName, SUPERV: supervisorName, PRODUTO: productCode,
                     DESCRICAO: String(rawRow['DESCRICAO'] || ''), FORNECEDOR: String(rawRow['FORNECEDOR'] || ''),
-                    OBSERVACAOFOR: String(rawRow['OBSERVACAOFOR'] || '').trim(), CODFOR: String(rawRow['CODFOR'] || ''),
-                    CODUSUR: codUsur, CODCLI: String(rawRow['CODCLI'] || ''), CLIENTE_NOME: clientInfo.nomeCliente || 'N/A',
+                    OBSERVACAOFOR: String(rawRow['OBSERVACAOFOR'] || '').trim(), CODFOR: String(rawRow['CODFOR'] || '').trim(),
+                    CODUSUR: codUsur, CODCLI: String(rawRow['CODCLI'] || '').trim(), CLIENTE_NOME: clientInfo.nomeCliente || 'N/A',
                     CIDADE: clientInfo.cidade || 'N/A', BAIRRO: clientInfo.bairro || 'N/A',
                     QTVENDA: qtVenda, VLVENDA: parseBrazilianNumber(rawRow['VLVENDA']),
                     TOTPESOLIQ: parseBrazilianNumber(rawRow['TOTPESOLIQ']), DTPED: dtPed, DTSAIDA: dtSaida, 
                     POSICAO: String(rawRow['POSICAO'] || ''),
+                    FILIAL: String(rawRow['FILIAL'] || ''),
+                    ESTOQUECX: parseBrazilianNumber(rawRow['ESTOQUECX']),
+                    ESTOQUEUNIT: parseBrazilianNumber(rawRow['ESTOQUEUNIT']),
                     QTVENDA_EMBALAGEM_MASTER: isNaN(qtdeMaster) || qtdeMaster === 0 ? 0 : qtVenda / qtdeMaster
                 };
             });
@@ -234,49 +195,49 @@
 
         // Event listener que aguarda mensagens da página principal
         self.onmessage = async (event) => {
-            const { salesFile, clientsFile, productsFile, historyFile, stockFile } = event.data;
+            const { salesFile, clientsFile, productsFile, historyFile } = event.data;
 
             try {
                 self.postMessage({ type: 'progress', status: 'Lendo arquivos...', percentage: 10 });
-                const [salesDataRaw, clientsDataRaw, productsDataRaw, historyDataRaw, stockData] = await Promise.all([
+                const [salesDataRaw, clientsDataRaw, productsDataRaw, historyDataRaw] = await Promise.all([
                     readFile(salesFile),
                     readFile(clientsFile),
                     readFile(productsFile),
-                    readFile(historyFile),
-                    readStockFile(stockFile)
+                    readFile(historyFile)
                 ]);
                 
-                const { stockData05, stockData08 } = stockData;
+                self.postMessage({ type: 'progress', status: 'Extraindo estoque do arquivo de vendas...', percentage: 25 });
+                const stockMap05 = new Map();
+                const stockMap08 = new Map();
 
-                self.postMessage({ type: 'progress', status: 'Mapeando produtos e estoque...', percentage: 30 });
+                salesDataRaw.forEach(item => {
+                    const productCode = String(item['PRODUTO'] || '').trim();
+                    const branch = String(item['FILIAL'] || '').trim();
+                    const stockQtyCx = parseBrazilianNumber(item['ESTOQUECX']);
+
+                    if (productCode && branch) {
+                        if (branch.includes('5')) {
+                            stockMap05.set(productCode, stockQtyCx);
+                        } else if (branch.includes('8')) {
+                            stockMap08.set(productCode, stockQtyCx);
+                        }
+                    }
+                });
+
+                self.postMessage({ type: 'progress', status: 'Mapeando produtos...', percentage: 30 });
                 const productMasterMap = new Map();
                 productsDataRaw.forEach(prod => {
-                    const productCode = String(prod['Código'] || '');
+                    const productCode = String(prod['Código'] || '').trim();
                     if (!productCode) return;
                     let qtdeMaster = parseInt(prod['Qtde embalagem master(Compra)'], 10);
                     if (isNaN(qtdeMaster) || qtdeMaster <= 0) qtdeMaster = 1;
                     productMasterMap.set(productCode, qtdeMaster);
                 });
 
-                const createStockMap = (stockRawData) => {
-                    const stockMap = new Map();
-                    stockRawData.forEach(item => {
-                        const productCode = String(item['CODPROD'] || '').trim();
-                        if (productCode) {
-                            const stockQty = parseBrazilianNumber(item['QT. EMB. MASTER']);
-                            stockMap.set(productCode, stockQty);
-                        }
-                    });
-                    return stockMap;
-                };
-
-                const stockMap05 = createStockMap(stockData05);
-                const stockMap08 = createStockMap(stockData08);
-
                 const clientRcaOverrides = new Map();
                 salesDataRaw.forEach(rawRow => {
                     const pedido = String(rawRow['PEDIDO'] || '');
-                    const codCli = String(rawRow['CODCLI'] || '');
+                    const codCli = String(rawRow['CODCLI'] || '').trim();
                     if(!codCli) return;
                     if (pedido.startsWith('120')) clientRcaOverrides.set(codCli, '1002');
                 });
@@ -284,7 +245,7 @@
                 self.postMessage({ type: 'progress', status: 'Processando clientes...', percentage: 50 });
                 const clientMap = new Map();
                 clientsDataRaw.forEach(client => {
-                    const codCli = String(client['Código'] || '');
+                    const codCli = String(client['Código'] || '').trim();
                     if (!codCli) return;
 
                     const rca1 = String(client['RCA 1'] || '');
@@ -299,8 +260,8 @@
                     const clientData = {
                         'Código': codCli,
                         rcas: Array.from(rcas),
-                        rca1: rca1, // Armazena RCA 1 explicitamente
-                        rca2: rca2, // Armazena RCA 2 explicitamente
+                        rca1: rca1, 
+                        rca2: rca2, 
                         cidade: String(client['Nome da Cidade'] || 'N/A'),
                         nomeCliente: String(client['Fantasia'] || client['Cliente'] || 'N/A'),
                         bairro: String(client['Bairro'] || 'N/A'),
@@ -325,7 +286,6 @@
 
                 self.postMessage({ type: 'progress', status: 'Mapeando vendedores...', percentage: 60 });
                 const rcaInfoMap = new Map();
-                // Usa todos os dados de vendas para criar um mapa de RCA para Nome/Supervisor
                 [...salesDataRaw, ...historyDataRaw].forEach(row => {
                     const codusur = String(row['CODUSUR'] || '').trim();
                     if (codusur && !rcaInfoMap.has(codusur)) {
@@ -338,7 +298,7 @@
 
                 self.postMessage({ type: 'progress', status: 'Reatribuindo vendas do trimestre...', percentage: 65 });
                 const reattributedHistoryDataRaw = historyDataRaw.map(sale => {
-                    const codCli = String(sale['CODCLI'] || '');
+                    const codCli = String(sale['CODCLI'] || '').trim();
                     const clientData = clientMap.get(codCli);
                     const observacaoFor = String(sale['OBSERVACAOFOR'] || '').trim().toUpperCase();
 
@@ -349,24 +309,20 @@
                         const currentRca1 = clientData.rca1;
                         const currentRca2 = clientData.rca2;
 
-                        // Se RCA1 e RCA2 são iguais (e não 53), esse vendedor assume todas as vendas do cliente.
                         if (currentRca1 && currentRca1 === currentRca2 && currentRca1 !== '53') {
                             targetRcaCode = currentRca1;
                         } 
-                        // Vendas PEPSICO vão para o RCA 1
                         else if (observacaoFor === 'PEPSICO') {
                             if (currentRca1 && currentRca1 !== '53') {
                                 targetRcaCode = currentRca1;
                             }
                         } 
-                        // Vendas MULTIMARCAS vão para o RCA 2
                         else if (observacaoFor === 'MULTIMARCAS') {
                             if (currentRca2 && currentRca2 !== '53') {
                                 targetRcaCode = currentRca2;
                             }
                         }
                         
-                        // Se um RCA alvo foi definido, e temos as informações dele, sobrescreve o vendedor.
                         if (targetRcaCode && rcaInfoMap.has(targetRcaCode)) {
                             const newOwnerInfo = rcaInfoMap.get(targetRcaCode);
                             newSale['CODUSUR'] = targetRcaCode;
@@ -376,7 +332,6 @@
                         
                         return newSale;
                     }
-                    // Se o cliente não foi encontrado no cadastro atual, mantém os dados originais da venda.
                     return sale;
                 });
 
@@ -443,7 +398,6 @@
         };
     </script>
 
-    <!-- TEMPLATE DA LÓGICA DO DASHBOARD. FICA ESCONDIDO E É LIDO PELO SCRIPT PRINCIPAL -->
     <script id="report-logic-script" type="text/template">
         const allSalesData = embeddedData.detailed;
         const allHistoryData = embeddedData.history;
@@ -467,18 +421,21 @@
         const cityView = document.getElementById('city-view');
         const weeklyView = document.getElementById('weekly-view');
         const comparisonView = document.getElementById('comparison-view');
+        const stockView = document.getElementById('stock-view');
         
         const showWeeklyBtn = document.getElementById('show-weekly-btn');
         const showCityBtn = document.getElementById('show-city-btn');
         const backToMainFromCityBtn = document.getElementById('back-to-main-from-city-btn');
         const backToMainFromWeeklyBtn = document.getElementById('back-to-main-from-weekly-btn');
         const backToMainFromComparisonBtn = document.getElementById('back-to-main-from-comparison-btn');
+        const backToMainFromStockBtn = document.getElementById('back-to-main-from-stock-btn');
 
         const totalVendasEl = document.getElementById('total-vendas');
         const totalPesoEl = document.getElementById('total-peso');
         const viewChartBtn = document.getElementById('viewChartBtn');
         const viewTableBtn = document.getElementById('viewTableBtn');
         const viewComparisonBtn = document.getElementById('viewComparisonBtn');
+        const viewStockBtn = document.getElementById('viewStockBtn');
         const chartView = document.getElementById('chartView');
         const tableView = document.getElementById('tableView');
         const faturamentoBtn = document.getElementById('faturamentoBtn');
@@ -552,7 +509,55 @@
         const weeklyComparisonChartContainer = document.getElementById('weeklyComparisonChartContainer');
         const monthlyComparisonChartContainer = document.getElementById('monthlyComparisonChartContainer');
         
-        const filialFilter = document.getElementById('filial-filter');
+        // ELEMENTOS DA TELA DE ESTOQUE
+        const stockFilialFilter = document.getElementById('stock-filial-filter');
+        const stockRedeGroupContainer = document.getElementById('stock-rede-group-container');
+        const stockComRedeBtn = document.getElementById('stock-com-rede-btn');
+        const stockComRedeBtnText = document.getElementById('stock-com-rede-btn-text');
+        const stockRedeFilterDropdown = document.getElementById('stock-rede-filter-dropdown');
+        const stockFornecedorToggleContainer = document.getElementById('stock-fornecedor-toggle-container');
+        const stockSupervisorFilter = document.getElementById('stock-supervisor-filter');
+        const stockVendedorFilterBtn = document.getElementById('stock-vendedor-filter-btn');
+        const stockVendedorFilterText = document.getElementById('stock-vendedor-filter-text');
+        const stockVendedorFilterDropdown = document.getElementById('stock-vendedor-filter-dropdown');
+        const stockSupplierFilterBtn = document.getElementById('stock-supplier-filter-btn');
+        const stockSupplierFilterText = document.getElementById('stock-supplier-filter-text');
+        const stockSupplierFilterDropdown = document.getElementById('stock-supplier-filter-dropdown');
+        const stockCityFilter = document.getElementById('stock-city-filter');
+        const stockCitySuggestions = document.getElementById('stock-city-suggestions');
+        const stockProductFilterBtn = document.getElementById('stock-product-filter-btn');
+        const stockProductFilterText = document.getElementById('stock-product-filter-text');
+        const stockProductFilterDropdown = document.getElementById('stock-product-filter-dropdown');
+        const clearStockFiltersBtn = document.getElementById('clear-stock-filters-btn');
+        const stockAnalysisTableBody = document.getElementById('stock-analysis-table-body');
+        const growthTableBody = document.getElementById('growth-table-body');
+        const declineTableBody = document.getElementById('decline-table-body');
+        const newProductsTableBody = document.getElementById('new-products-table-body');
+        const lostProductsTableBody = document.getElementById('lost-products-table-body');
+
+        // ELEMENTOS DA TELA DE INOVAÇÕES
+        const innovationsView = document.getElementById('innovations-view');
+        const viewInnovationsBtn = document.getElementById('viewInnovationsBtn');
+        const backToMainFromInnovationsBtn = document.getElementById('back-to-main-from-innovations-btn');
+        const innovationsSupervisorFilter = document.getElementById('innovations-supervisor-filter');
+        const innovationsVendedorFilterBtn = document.getElementById('innovations-vendedor-filter-btn');
+        const innovationsVendedorFilterText = document.getElementById('innovations-vendedor-filter-text');
+        const innovationsVendedorFilterDropdown = document.getElementById('innovations-vendedor-filter-dropdown');
+        const innovationsSupplierFilterBtn = document.getElementById('innovations-supplier-filter-btn');
+        const innovationsSupplierFilterText = document.getElementById('innovations-supplier-filter-text');
+        const innovationsSupplierFilterDropdown = document.getElementById('innovations-supplier-filter-dropdown');
+        const innovationsCityFilter = document.getElementById('innovations-city-filter');
+        const innovationsCitySuggestions = document.getElementById('innovations-city-suggestions');
+        const innovationsProductFilterBtn = document.getElementById('innovations-product-filter-btn');
+        const innovationsProductFilterText = document.getElementById('innovations-product-filter-text');
+        const innovationsProductFilterDropdown = document.getElementById('innovations-product-filter-dropdown');
+        const clearInnovationsFiltersBtn = document.getElementById('clear-innovations-filters-btn');
+        const innovationsTableBody = document.getElementById('innovations-table-body');
+        const innovationsPlaceholder = document.getElementById('innovations-placeholder');
+        const innovationsResults = document.getElementById('innovations-results');
+        const innovationsActiveClientsKpi = document.getElementById('innovations-active-clients-kpi');
+        const innovationsTopCoverageProductKpi = document.getElementById('innovations-top-coverage-product-kpi');
+        const innovationsTopCoverageValueKpi = document.getElementById('innovations-top-coverage-value-kpi');
 
         const modal = document.getElementById('order-details-modal');
         const modalCloseBtn = document.getElementById('modal-close-btn');
@@ -577,6 +582,7 @@
         let currentFornecedor = '';
         let currentWeeklyFornecedor = '';
         let currentComparisonFornecedor = '';
+        let currentStockFornecedor = '';
         let useTendencyComparison = false;
         let comparisonChartType = 'weekly';
         let activeClientsForExport = [];
@@ -584,18 +590,27 @@
         let selectedSellers = [];
         let selectedCitySellers = [];
         let selectedComparisonSellers = [];
+        let selectedStockSellers = [];
         let selectedComparisonSuppliers = [];
         let selectedComparisonProducts = [];
+        let selectedStockSuppliers = [];
+        let selectedStockProducts = [];
         let historicalBests = {};
         let selectedHolidays = [];
         
         let selectedMainRedes = [];
         let selectedCityRedes = [];
         let selectedComparisonRedes = [];
+        let selectedStockRedes = [];
 
         let mainRedeGroupFilter = '';
         let cityRedeGroupFilter = ''; 
         let comparisonRedeGroupFilter = '';
+        let stockRedeGroupFilter = '';
+        
+        let selectedInnovationsSellers = [];
+        let selectedInnovationsSuppliers = [];
+        let selectedInnovationsProducts = [];
         
         const lastSaleDate = allSalesData.length > 0 ? new Date(Math.max.apply(null, allSalesData.map(s => parseDate(s.DTPED)).filter(d => d && !isNaN(d)))) : new Date();
         lastSaleDate.setHours(0,0,0,0);
@@ -915,6 +930,7 @@
         
         function populateSupervisors(filterElementId, dataSource) {
             const supervisorFilterEl = document.getElementById(filterElementId);
+            if (!supervisorFilterEl) return;
             const supervisors = [...new Set(dataSource.map(item => item.SUPERV).filter(Boolean))].sort();
             const currentSupervisorValue = supervisorFilterEl.value;
             supervisorFilterEl.innerHTML = '<option value="">Todos</option>';
@@ -999,7 +1015,6 @@
             comparisonSupervisorFilter.value = ''; 
             currentComparisonFornecedor = ''; 
             comparisonCityFilter.value = ''; 
-            filialFilter.value = 'ambas';
             selectedComparisonSellers = [];
             selectedComparisonSuppliers = [];
             selectedComparisonProducts = [];
@@ -1015,6 +1030,30 @@
             updateAllComparisonFilters();
             updateComparisonView();
         }
+
+        function resetStockFilters() {
+            stockFilialFilter.value = 'ambas';
+            currentStockFornecedor = '';
+            stockSupervisorFilter.value = '';
+            stockCityFilter.value = '';
+            selectedStockSellers = [];
+            selectedStockSuppliers = [];
+            selectedStockProducts = [];
+            stockRedeGroupFilter = '';
+            selectedStockRedes = [];
+
+            stockRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            stockRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
+            updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
+
+            document.querySelectorAll('#stock-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
+            
+            updateStockSellerFilter();
+            updateStockSupplierFilter();
+            updateStockProductFilter();
+            updateStockView();
+        }
+
 
         function getRelevantClientsForCityFilter() {
             let clients = [...allClientsData];
@@ -1041,14 +1080,17 @@
             return clients;
         }
         
-        function updateCitySuggestions(filterInput, suggestionsContainer, clientDataSource) {
+        function updateCitySuggestions(filterInput, suggestionsContainer, dataSource) {
             const inputValue = filterInput.value.toLowerCase();
-            const allAvailableCities = [...new Set(clientDataSource.map(c => c.cidade).filter(c => c && c !== 'N/A'))].sort();
+            const allAvailableCities = [...new Set(dataSource.map(c => c.CIDADE || c.cidade).filter(c => c && c !== 'N/A'))].sort();
             const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
+            
             if (filteredCities.length > 0 && (document.activeElement === filterInput || !suggestionsContainer.classList.contains('manual-hide'))) {
                 suggestionsContainer.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
                 suggestionsContainer.classList.remove('hidden');
-            } else suggestionsContainer.classList.add('hidden');
+            } else {
+                suggestionsContainer.classList.add('hidden');
+            }
         }
 
         function validateCityFilter() {
@@ -1279,7 +1321,7 @@
             else showNoDataMessage('mixChart', 'Sem dados para o ranking.');
         }
 
-        function updateSupplierFilter(dropdown, filterText, selectedArray, dataSource) {
+        function updateSupplierFilter(dropdown, filterText, selectedArray, dataSource, filterType = 'comparison') {
             const suppliers = new Map();
             dataSource.forEach(s => { if(s.CODFOR && s.FORNECEDOR) suppliers.set(s.CODFOR, s.FORNECEDOR); });
             const sortedSuppliers = [...suppliers.entries()].sort((a, b) => a[1].localeCompare(b[1]));
@@ -1289,7 +1331,7 @@
             dropdown.innerHTML = '';
             sortedSuppliers.forEach(([cod, name]) => {
                 const isChecked = selectedArray.includes(cod);
-                dropdown.innerHTML += `<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${cod}" ${isChecked ? 'checked' : ''}><span class="ml-2 text-xs">${cod} - ${name}</span></label>`;
+                dropdown.innerHTML += `<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${cod}" ${isChecked ? 'checked' : ''}><span class="ml-2 text-xs">${cod} - ${name}</span></label>`;
             });
 
             if (selectedArray.length === 0 || selectedArray.length === sortedSuppliers.length) {
@@ -1301,7 +1343,6 @@
             }
             return selectedArray;
         }
-
 
         function updateComparisonCitySuggestions(dataSource) {
             const inputValue = comparisonCityFilter.value.toLowerCase();
@@ -1315,58 +1356,6 @@
             }
         }
         
-        function getPositiveClientsWithNewLogic(salesData, pasta) {
-            const salesByClient = new Map();
-            salesData.forEach(sale => {
-                if (!sale.CODCLI) return;
-                const clientTotal = salesByClient.get(sale.CODCLI) || 0;
-                salesByClient.set(sale.CODCLI, clientTotal + sale.VLVENDA);
-            });
-
-            let positiveClients = 0;
-            const threshold = pasta === 'PEPSICO' ? 50 : (pasta === 'MULTIMARCAS' ? 1 : 0);
-
-            for (const total of salesByClient.values()) {
-                if (total > threshold) {
-                    positiveClients++;
-                }
-            }
-            return positiveClients;
-        }
-
-        function getMonthlyPositiveClientsCountWithNewLogic(salesData, pasta) {
-            const salesByMonthByClient = {};
-
-            salesData.forEach(sale => {
-                if (!sale.CODCLI) return;
-                const saleDate = parseDate(sale.DTPED);
-                if (saleDate) {
-                    const monthKey = `${saleDate.getFullYear()}-${saleDate.getMonth()}`;
-                    if (!salesByMonthByClient[monthKey]) {
-                        salesByMonthByClient[monthKey] = new Map();
-                    }
-                    const clientSales = salesByMonthByClient[monthKey].get(sale.CODCLI) || 0;
-                    salesByMonthByClient[monthKey].set(sale.CODCLI, clientSales + sale.VLVENDA);
-                }
-            });
-
-            let totalPositiveClientsSum = 0;
-            const threshold = pasta === 'PEPSICO' ? 50 : (pasta === 'MULTIMARCAS' ? 1 : 0);
-
-            for (const monthKey in salesByMonthByClient) {
-                const clientTotals = salesByMonthByClient[monthKey];
-                let positiveClientsInMonth = 0;
-                for (const total of clientTotals.values()) {
-                    if (total > threshold) {
-                        positiveClientsInMonth++;
-                    }
-                }
-                totalPositiveClientsSum += positiveClientsInMonth;
-            }
-
-            return totalPositiveClientsSum;
-        }
-
         function getSundayBasedWeeks(year, month) {
             const weeks = [];
             const firstDayOfMonth = new Date(year, month, 1);
@@ -1385,54 +1374,140 @@
             }
             return weeks;
         }
-
-        function calculateAverageMix(salesData, targetCodfors) {
-            if (!salesData || salesData.length === 0 || !targetCodfors || targetCodfors.length === 0) {
-                return 0;
-            }
-            const relevantSales = salesData.filter(sale => targetCodfors.includes(String(sale.CODFOR)));
-            if (relevantSales.length === 0) return 0;
-            const mixPerClient = {};
-            relevantSales.forEach(sale => {
-                if (!sale.CODCLI || !sale.PRODUTO) return;
-                if (!mixPerClient[sale.CODCLI]) mixPerClient[sale.CODCLI] = new Set();
-                mixPerClient[sale.CODCLI].add(sale.PRODUTO);
-            });
-            const mixValues = Object.values(mixPerClient).map(productSet => productSet.size);
-            if (mixValues.length === 0) return 0;
-            const totalMixItems = mixValues.reduce((sum, current) => sum + current, 0);
-            return totalMixItems / mixValues.length;
+        
+        function normalize(str) {
+            return str
+                ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '').toUpperCase()
+                : '';
         }
 
-        function calculatePositivacaoPorCesta(salesData, requiredCategories) {
-            if (!salesData || salesData.length === 0 || !requiredCategories || requiredCategories.length === 0) {
-                return 0;
-            }
-            const clientPurchases = new Map(); 
+        function getPositiveClientsWithNewLogic(salesData) {
+            const salesByClient = new Map();
             salesData.forEach(sale => {
-                if (!sale.CODCLI || !sale.DESCRICAO) return;
-                const productDescription = sale.DESCRICAO.toUpperCase();
-                for (const category of requiredCategories) {
-                    if (productDescription.includes(category)) {
-                        if (!clientPurchases.has(sale.CODCLI)) {
-                            clientPurchases.set(sale.CODCLI, new Set());
-                        }
-                        clientPurchases.get(sale.CODCLI).add(category);
-                        break; 
+                if (!sale.CODCLI) return;
+                const clientTotal = salesByClient.get(sale.CODCLI) || 0;
+                salesByClient.set(sale.CODCLI, clientTotal + sale.VLVENDA);
+            });
+
+            let positiveClients = 0;
+            const threshold = 1;
+
+            for (const total of salesByClient.values()) {
+                if (total > threshold) {
+                    positiveClients++;
+                }
+            }
+            return positiveClients;
+        }
+
+        function calculateAverageMixComDevolucao(salesData, targetCodfors) {
+            if (!salesData || salesData.length === 0 || !targetCodfors || targetCodfors.length === 0) return 0;
+
+            const clientProductNetValue = new Map(); 
+
+            for (const sale of salesData) {
+                if (!targetCodfors.includes(String(sale.CODFOR))) continue;
+                if (!sale.CODCLI || !sale.PRODUTO) continue;
+
+                if (!clientProductNetValue.has(sale.CODCLI)) {
+                    clientProductNetValue.set(sale.CODCLI, new Map());
+                }
+                const clientProducts = clientProductNetValue.get(sale.CODCLI);
+
+                const currentValue = clientProducts.get(sale.PRODUTO) || 0;
+                clientProducts.set(sale.PRODUTO, currentValue + (Number(sale.VLVENDA) || 0));
+            }
+
+            const mixValues = [];
+            for (const products of clientProductNetValue.values()) {
+                let positiveProductCount = 0;
+                for (const netValue of products.values()) {
+                    if (netValue > 1) { 
+                        positiveProductCount++;
                     }
                 }
-            });
+                if (positiveProductCount > 0) {
+                    mixValues.push(positiveProductCount);
+                }
+            }
+            
+            if (mixValues.length === 0) return 0;
+
+            return mixValues.reduce((a, b) => a + b, 0) / mixValues.length;
+        }
+
+        function calculatePositivacaoPorCestaComDevolucao(salesData, requiredCategories) {
+            if (!salesData || salesData.length === 0 || !requiredCategories || requiredCategories.length === 0) return 0;
+
+            const normalizedCategories = requiredCategories.map(normalize);
+            const clientProductNetSales = new Map(); 
+
+            for (const sale of salesData) {
+                if (!sale.CODCLI || !sale.PRODUTO) continue;
+
+                if (!clientProductNetSales.has(sale.CODCLI)) {
+                    clientProductNetSales.set(sale.CODCLI, new Map());
+                }
+                const clientProducts = clientProductNetSales.get(sale.CODCLI);
+
+                if (!clientProducts.has(sale.PRODUTO)) {
+                    clientProducts.set(sale.PRODUTO, { netValue: 0, description: sale.DESCRICAO });
+                }
+                const productData = clientProducts.get(sale.PRODUTO);
+                productData.netValue += (Number(sale.VLVENDA) || 0);
+            }
+
+            const clientPurchasedCategories = new Map(); 
+
+            for (const [codcli, products] of clientProductNetSales.entries()) {
+                for (const data of products.values()) {
+                    if (data.netValue > 1) { 
+                        const normalizedDescription = normalize(data.description);
+                        for (const category of normalizedCategories) {
+                            if (normalizedDescription.includes(category)) {
+                                if (!clientPurchasedCategories.has(codcli)) {
+                                    clientPurchasedCategories.set(codcli, new Set());
+                                }
+                                clientPurchasedCategories.get(codcli).add(category);
+                                break; 
+                            }
+                        }
+                    }
+                }
+            }
+
             let positivadosCount = 0;
-            const requiredCategoryCount = requiredCategories.length;
-            for (const categoriesPurchased of clientPurchases.values()) {
-                if (categoriesPurchased.size === requiredCategoryCount) {
+            const requiredCategoryCount = normalizedCategories.length;
+            for (const categoriesPurchased of clientPurchasedCategories.values()) {
+                if (categoriesPurchased.size >= requiredCategoryCount) {
                     positivadosCount++;
                 }
             }
+
             return positivadosCount;
         }
+
+        function groupSalesByMonth(salesData) {
+            const salesByMonth = {};
+            salesData.forEach(sale => {
+                const date = parseDate(sale.DTPED);
+                if (!date || isNaN(date.getTime())) return;
+                const monthKey = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+                if (!salesByMonth[monthKey]) salesByMonth[monthKey] = [];
+                salesByMonth[monthKey].push(sale);
+            });
+            return salesByMonth;
+        }
+        function monthlyKpiAverage(historySales, kpiFn, ...kpiArgs) {
+            const salesByMonth = groupSalesByMonth(historySales);
+            const kpiValues = Object.values(salesByMonth).map(sales => kpiFn(sales, ...kpiArgs));
+            if (kpiValues.length === 0) return 0;
+            return kpiValues.reduce((a, b) => a + b, 0) / kpiValues.length;
+        }
         
-        function getComparisonFilteredData(excludeFilter = null) {
+        function getComparisonFilteredData(options = {}) {
+            const { excludeFilter = null } = options;
+            
             let clients = [...allClientsData];
             if (comparisonRedeGroupFilter === 'com_rede') {
                 clients = clients.filter(c => c.ramo && c.ramo !== 'N/A');
@@ -1450,44 +1525,43 @@
             const products = selectedComparisonProducts;
             const pasta = currentComparisonFornecedor;
             const city = comparisonCityFilter.value.trim();
-            const fullData = [...allSalesData, ...allHistoryData];
 
-            return fullData.filter(s => 
+            const filterFunction = s => 
                 (clientCodes.has(s.CODCLI)) &&
                 (excludeFilter === 'supervisor' || !supervisor || s.SUPERV === supervisor) &&
                 (excludeFilter === 'seller' || sellers.length === 0 || sellers.includes(s.NOME)) &&
                 (excludeFilter === 'supplier' || suppliers.length === 0 || suppliers.includes(String(s.CODFOR))) &&
                 (excludeFilter === 'product' || products.length === 0 || products.includes(String(s.PRODUTO))) &&
                 (excludeFilter === 'pasta' || !pasta || s.OBSERVACAOFOR === pasta) &&
-                (excludeFilter === 'city' || !city || (s.CIDADE && s.CIDADE.toLowerCase() === city.toLowerCase()))
-            );
+                (excludeFilter === 'city' || !city || (s.CIDADE && s.CIDADE.toLowerCase() === city.toLowerCase()));
+
+            return {
+                currentSales: allSalesData.filter(filterFunction),
+                historySales: allHistoryData.filter(filterFunction)
+            };
         }
 
+
         function updateAllComparisonFilters() {
-            // Update Supervisor
-            const supervisorOptionsData = getComparisonFilteredData('supervisor');
+            const supervisorOptionsData = getComparisonFilteredData({ excludeFilter: 'supervisor' }).historySales;
             const currentSupervisor = comparisonSupervisorFilter.value;
             populateSupervisors('comparison-supervisor-filter', supervisorOptionsData);
             if ([...comparisonSupervisorFilter.options].some(o => o.value === currentSupervisor)) {
                 comparisonSupervisorFilter.value = currentSupervisor;
             }
 
-            // Update Seller
-            const sellerOptionsData = getComparisonFilteredData('seller');
+            const sellerOptionsData = getComparisonFilteredData({ excludeFilter: 'seller' }).historySales;
             selectedComparisonSellers = updateSellerFilter(comparisonSupervisorFilter.value, comparisonVendedorFilterDropdown, comparisonVendedorFilterText, selectedComparisonSellers, sellerOptionsData);
 
-            // Update Supplier
-            const supplierOptionsData = getComparisonFilteredData('supplier');
-            selectedComparisonSuppliers = updateSupplierFilter(comparisonSupplierFilterDropdown, comparisonSupplierFilterText, selectedComparisonSuppliers, supplierOptionsData);
+            const supplierOptionsData = getComparisonFilteredData({ excludeFilter: 'supplier' }).historySales;
+            selectedComparisonSuppliers = updateSupplierFilter(comparisonSupplierFilterDropdown, comparisonSupplierFilterText, selectedComparisonSuppliers, supplierOptionsData, 'comparison');
             
-            // Update Product list
             updateComparisonProductFilter();
 
-            const cityOptionsData = getComparisonFilteredData('city');
+            const cityOptionsData = getComparisonFilteredData({ excludeFilter: 'city' }).historySales;
             updateComparisonCitySuggestions(cityOptionsData);
 
-            // Update Pasta buttons state
-            const pastaOptionsData = getComparisonFilteredData('pasta');
+            const pastaOptionsData = getComparisonFilteredData({ excludeFilter: 'pasta' }).historySales;
             const pepsicoBtn = document.querySelector('#comparison-fornecedor-toggle-container button[data-fornecedor="PEPSICO"]');
             const multimarcasBtn = document.querySelector('#comparison-fornecedor-toggle-container button[data-fornecedor="MULTIMARCAS"]');
             const hasPepsico = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'PEPSICO');
@@ -1498,16 +1572,12 @@
             multimarcasBtn.classList.toggle('opacity-50', !hasMultimarcas);
         }
 
-
-        function updateComparisonProductFilter() {
-            const dropdown = comparisonProductFilterDropdown;
-            const filterText = comparisonProductFilterText;
-            const searchInput = document.getElementById('comparison-product-search-input');
-            const listContainer = document.getElementById('comparison-product-list');
+        function updateProductFilter(dropdown, filterText, selectedArray, dataSource, filterType = 'comparison') {
+            const searchInput = dropdown.querySelector('input[type="text"]');
+            const listContainer = dropdown.querySelector('div[id$="-list"]');
             const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
 
-            const productsData = getComparisonFilteredData('product');
-            const products = [...new Map(productsData.map(s => [s.PRODUTO, s.DESCRICAO])).entries()].sort((a,b) => a[1].localeCompare(b[1]));
+            const products = [...new Map(dataSource.map(s => [s.PRODUTO, s.DESCRICAO])).entries()].sort((a,b) => a[1].localeCompare(b[1]));
 
             const filteredProducts = searchTerm.length > 0 
                 ? products.filter(([code, name]) =>
@@ -1517,33 +1587,61 @@
 
             listContainer.innerHTML = '';
             filteredProducts.forEach(([code, name]) => {
-                const isChecked = selectedComparisonProducts.includes(code);
+                const isChecked = selectedArray.includes(code);
                 listContainer.innerHTML += `
                     <label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer">
-                        <input type="checkbox" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${code}" ${isChecked ? 'checked' : ''}>
+                        <input type="checkbox" data-filter-type="${filterType}" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${code}" ${isChecked ? 'checked' : ''}>
                         <span class="ml-2 text-xs">(${code}) ${name}</span>
                     </label>`;
             });
 
-            if (selectedComparisonProducts.length === 0) {
+            if (selectedArray.length === 0) {
                 filterText.textContent = 'Todos os Produtos';
-            } else if (selectedComparisonProducts.length === 1) {
+            } else if (selectedArray.length === 1) {
                 const productsInfo = new Map(products);
-                filterText.textContent = productsInfo.get(selectedComparisonProducts[0]) || '1 selecionado';
+                filterText.textContent = productsInfo.get(selectedArray[0]) || '1 selecionado';
             } else {
-                filterText.textContent = `${selectedComparisonProducts.length} produtos selecionados`;
+                filterText.textContent = `${selectedArray.length} produtos selecionados`;
+            }
+        }
+        
+        function updateComparisonProductFilter() {
+             updateProductFilter(comparisonProductFilterDropdown, comparisonProductFilterText, selectedComparisonProducts, getComparisonFilteredData({ excludeFilter: 'product' }).historySales, 'comparison');
+        }
+        
+        function updateStockProductFilter() {
+             updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, getStockFilteredData({excludeFilter: 'product'}).sales, 'stock');
+        }
+
+        function updateStockSupplierFilter() {
+            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, getStockFilteredData({excludeFilter: 'supplier'}).sales, 'stock');
+        }
+        
+        function updateStockSellerFilter() {
+            selectedStockSellers = updateSellerFilter(stockSupervisorFilter.value, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, getStockFilteredData({excludeFilter: 'seller'}).sales);
+        }
+
+        function updateStockCitySuggestions(dataSource) {
+            const inputValue = stockCityFilter.value.toLowerCase();
+            const allAvailableCities = [...new Set(dataSource.map(c => c.CIDADE).filter(c => c && c !== 'N/A'))].sort();
+            const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
+            if (filteredCities.length > 0 && (document.activeElement === stockCityFilter || !stockCitySuggestions.classList.contains('manual-hide'))) {
+                stockCitySuggestions.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
+                stockCitySuggestions.classList.remove('hidden');
+            } else {
+                stockCitySuggestions.classList.add('hidden');
             }
         }
 
-        function getActiveStockMap() {
-            const filterValue = filialFilter.value;
+
+        function getActiveStockMap(filial) {
+            const filterValue = filial || stockFilialFilter.value;
             if (filterValue === '05') {
                 return stockData05;
             }
             if (filterValue === '08') {
                 return stockData08;
             }
-            // "ambas" - combine them by summing quantities
             const combinedStock = new Map(stockData05);
             stockData08.forEach((qty, code) => {
                 combinedStock.set(code, (combinedStock.get(code) || 0) + qty);
@@ -1551,73 +1649,83 @@
             return combinedStock;
         }
 
-        function updateComparisonView() {
-            const supervisor = comparisonSupervisorFilter.value;
-            const selectedCity = comparisonCityFilter.value.trim();
-            const activeStockMap = getActiveStockMap();
-
-            const applyFilters = (data) => {
-                let clients = [...allClientsData];
-                if (comparisonRedeGroupFilter === 'com_rede') {
+        function getStockFilteredData(options = {}) {
+            const { excludeFilter = null } = options;
+            
+            let clients = [...allClientsData];
+            if (excludeFilter !== 'rede') {
+                if (stockRedeGroupFilter === 'com_rede') {
                     clients = clients.filter(c => c.ramo && c.ramo !== 'N/A');
-                    if (selectedComparisonRedes.length > 0) {
-                        clients = clients.filter(c => selectedComparisonRedes.includes(c.ramo));
+                     if (selectedStockRedes.length > 0) {
+                        clients = clients.filter(c => selectedStockRedes.includes(c.ramo));
                     }
-                } else if (comparisonRedeGroupFilter === 'sem_rede') {
+                } else if (stockRedeGroupFilter === 'sem_rede') {
                     clients = clients.filter(c => !c.ramo || c.ramo === 'N/A');
                 }
-                const clientCodes = new Set(clients.map(c => c['Código']));
+            }
+            const clientCodes = new Set(clients.map(c => c['Código']));
 
-                return data.filter(s => 
-                    (clientCodes.has(s.CODCLI)) &&
-                    (!currentComparisonFornecedor || s.OBSERVACAOFOR === currentComparisonFornecedor) && 
-                    (!supervisor || s.SUPERV === supervisor) && 
-                    (selectedComparisonSellers.length === 0 || selectedComparisonSellers.includes(s.NOME)) && 
-                    (selectedComparisonSuppliers.length === 0 || selectedComparisonSuppliers.includes(String(s.CODFOR))) && 
-                    (selectedComparisonProducts.length === 0 || selectedComparisonProducts.includes(String(s.PRODUTO))) &&
-                    (!selectedCity || (s.CIDADE && s.CIDADE.toLowerCase() === selectedCity.toLowerCase()))
-                );
+            const supervisor = stockSupervisorFilter.value;
+            const sellers = selectedStockSellers;
+            const suppliers = selectedStockSuppliers;
+            const products = selectedStockProducts;
+            const pasta = currentStockFornecedor;
+            const city = stockCityFilter.value.trim();
+
+            const filterFunction = s => 
+                (clientCodes.has(s.CODCLI)) &&
+                (excludeFilter === 'supervisor' || !supervisor || s.SUPERV === supervisor) &&
+                (excludeFilter === 'seller' || sellers.length === 0 || sellers.includes(s.NOME)) &&
+                (excludeFilter === 'supplier' || suppliers.length === 0 || suppliers.includes(String(s.CODFOR))) &&
+                (excludeFilter === 'product' || products.length === 0 || products.includes(String(s.PRODUTO))) &&
+                (excludeFilter === 'pasta' || !pasta || s.OBSERVACAOFOR === pasta) &&
+                (excludeFilter === 'city' || !city || (s.CIDADE && s.CIDADE.toLowerCase() === city.toLowerCase()));
+
+            return {
+                sales: allSalesData.filter(filterFunction),
+                history: allHistoryData.filter(filterFunction)
             };
-            
-            const currentSales = applyFilters(allSalesData);
-            const historySales = applyFilters(allHistoryData);
-            
-            const historyTotalFat = historySales.reduce((sum, item) => sum + item.VLVENDA, 0);
-            const currentTotalFat = currentSales.reduce((sum, item) => sum + item.VLVENDA, 0);
-            const historyTotalPeso = historySales.reduce((sum, item) => sum + item.TOTPESOLIQ, 0);
-            const currentTotalPeso = currentSales.reduce((sum, item) => sum + item.TOTPESOLIQ, 0);
-            
-            const pasta = currentComparisonFornecedor;
-            const currentClients = getPositiveClientsWithNewLogic(currentSales, pasta);
-            const historyClientsTotalPerMonthSum = getMonthlyPositiveClientsCountWithNewLogic(historySales, pasta);
+        }
 
+        function updateComparisonView() {
+            const filteredData = getComparisonFilteredData();
+            const { currentSales, historySales } = filteredData;
+            
             const historyMonthsCount = getUniqueMonthCount(historySales);
-            const historyClientsAverage = historyMonthsCount > 0 ? historyClientsTotalPerMonthSum / historyMonthsCount : 0;
-            
+
+            // --- Current Period KPIs ---
+            const currentTotalFat = currentSales.reduce((sum, item) => sum + item.VLVENDA, 0);
+            const currentTotalPeso = currentSales.reduce((sum, item) => sum + item.TOTPESOLIQ, 0);
+            const currentClients = getPositiveClientsWithNewLogic(currentSales);
             const currentTicket = currentClients > 0 ? currentTotalFat / currentClients : 0;
-            const historyTicketAverage = historyClientsTotalPerMonthSum > 0 ? historyTotalFat / historyClientsTotalPerMonthSum : 0;
-
             const pepsicoCodfors = ['707', '708'];
-            const currentMixPepsico = calculateAverageMix(currentSales, pepsicoCodfors);
-            const historyMixPepsico = calculateAverageMix(historySales, pepsicoCodfors) / historyMonthsCount;
-            
             const saltyCategories = ['CHEETOS', 'DORITOS', 'FANDANGOS', 'RUFFLES', 'TORCIDA'];
-            const foodsCategories = ['TODDY', 'TODDYNHO', 'QUAKER', 'KEROCOCO'];
+            const foodsCategories = ['TODDYNHO', 'TODDY', 'QUAKER', 'KEROCOCO'];
+            const currentMixPepsico = calculateAverageMixComDevolucao(currentSales, pepsicoCodfors);
+            const currentPositivacaoSalty = calculatePositivacaoPorCestaComDevolucao(currentSales, saltyCategories);
+            const currentPositivacaoFoods = calculatePositivacaoPorCestaComDevolucao(currentSales, foodsCategories);
 
-            const currentPositivacaoSalty = calculatePositivacaoPorCesta(currentSales, saltyCategories);
-            const historyPositivacaoSalty = calculatePositivacaoPorCesta(historySales, saltyCategories) / historyMonthsCount;
+            // --- History Period KPIs (using monthly averages for consistency) ---
+            const historyTotalFat = historySales.reduce((sum, item) => sum + item.VLVENDA, 0);
+            const historyTotalPeso = historySales.reduce((sum, item) => sum + item.TOTPESOLIQ, 0);
+
+            const historyAvgFat = historyMonthsCount > 0 ? historyTotalFat / historyMonthsCount : 0;
+            const historyAvgPeso = historyMonthsCount > 0 ? historyTotalPeso / 1000 / historyMonthsCount : 0;
             
-            const currentPositivacaoFoods = calculatePositivacaoPorCesta(currentSales, foodsCategories);
-            const historyPositivacaoFoods = calculatePositivacaoPorCesta(historySales, foodsCategories) / historyMonthsCount;
+            const historyClientsAverage = monthlyKpiAverage(historySales, getPositiveClientsWithNewLogic);
+            const historyTicketAverage = historyClientsAverage > 0 ? historyAvgFat / historyClientsAverage : 0;
+            const historyMixPepsico = monthlyKpiAverage(historySales, calculateAverageMixComDevolucao, pepsicoCodfors);
+            const historyPositivacaoSalty = monthlyKpiAverage(historySales, calculatePositivacaoPorCestaComDevolucao, saltyCategories);
+            const historyPositivacaoFoods = monthlyKpiAverage(historySales, calculatePositivacaoPorCestaComDevolucao, foodsCategories);
 
             renderKpiCards([ 
-                { title: 'Faturamento Total', current: currentTotalFat, history: historyTotalFat / historyMonthsCount, format: 'currency' }, 
-                { title: 'Peso Total (Ton)', current: currentTotalPeso / 1000, history: historyTotalPeso / 1000 / historyMonthsCount, format: 'decimal' }, 
+                { title: 'Faturamento Total', current: currentTotalFat, history: historyAvgFat, format: 'currency' }, 
+                { title: 'Peso Total (Ton)', current: currentTotalPeso / 1000, history: historyAvgPeso, format: 'decimal' }, 
                 { title: 'Clientes Atendidos', current: currentClients, history: historyClientsAverage, format: 'integer' }, 
                 { title: 'Ticket Médio', current: currentTicket, history: historyTicketAverage, format: 'currency' },
                 { title: 'Mix por PDV (Pepsico)', current: currentMixPepsico, history: historyMixPepsico, format: 'mix' },
-                { title: 'Positivação Salty', current: currentPositivacaoSalty, history: historyPositivacaoSalty, format: 'integer' },
-                { title: 'Positivação Foods', current: currentPositivacaoFoods, history: historyPositivacaoFoods, format: 'integer' }
+                { title: 'Mix Salty', current: currentPositivacaoSalty, history: historyPositivacaoSalty, format: 'integer' },
+                { title: 'Mix Foods', current: currentPositivacaoFoods, history: historyPositivacaoFoods, format: 'integer' }
             ]);
             
             const currentYear = lastSaleDate.getFullYear();
@@ -1976,35 +2084,289 @@
             Object.keys(supervisorComparison).forEach(sup => supervisorComparison[sup].history /= historyMonthsCount);
             const supervisorTableBody = document.getElementById('supervisorComparisonTableBody');
             supervisorTableBody.innerHTML = Object.entries(supervisorComparison).map(([sup, data]) => { const variation = data.history > 0 ? ((data.current - data.history) / data.history) * 100 : (data.current > 0 ? 100 : 0); const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400'; return `<tr class="hover:bg-slate-700"><td class="px-4 py-2">${sup}</td><td class="px-4 py-2 text-right">${data.history.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right">${data.current.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td class="px-4 py-2 text-right ${colorClass}">${variation.toFixed(2)}%</td></tr>`; }).join('');
-
-            const productSalesCurrent = {};
-            const productSalesHistory = {};
-            currentSales.forEach(s => { if (!productSalesCurrent[s.DESCRICAO]) productSalesCurrent[s.DESCRICAO] = { value: 0, code: s.PRODUTO }; productSalesCurrent[s.DESCRICAO].value += s.QTVENDA_EMBALAGEM_MASTER; });
-            historySales.forEach(s => { if (!productSalesHistory[s.DESCRICAO]) productSalesHistory[s.DESCRICAO] = { value: 0, code: s.PRODUTO }; productSalesHistory[s.DESCRICAO].value += s.QTVENDA_EMBALAGEM_MASTER; });
-            Object.keys(productSalesHistory).forEach(prod => productSalesHistory[prod].value /= historyMonthsCount);
-            const allProducts = [...new Set([...Object.keys(productSalesCurrent), ...Object.keys(productSalesHistory)])];
-            const productChanges = []; 
-            let newProducts = []; 
-            let lostProducts = [];
-            allProducts.forEach(prod => {
-                const currentInfo = productSalesCurrent[prod] || { value: 0, code: (productSalesHistory[prod] ? productSalesHistory[prod].code : 'N/A') };
-                const historyInfo = productSalesHistory[prod] || { value: 0, code: (productSalesCurrent[prod] ? productSalesCurrent[prod].code : 'N/A') };
-                const currentVal = currentInfo.value; const historyVal = historyInfo.value;
-                const productCode = currentInfo.code !== 'N/A' ? currentInfo.code : historyInfo.code;
-                if (currentVal > 0 && historyVal > 0) productChanges.push({ product: prod, code: productCode, diff: currentVal - historyVal, current: currentVal, history: historyVal });
-                else if (currentVal > 0 && historyVal === 0) newProducts.push({ product: prod, code: productCode, current: currentVal });
-                else if (currentVal === 0 && historyVal > 0) lostProducts.push({ product: prod, code: productCode, history: historyVal });
-            });
-            
-            lostProducts = lostProducts.filter(p => (activeStockMap.get(p.code) || 0) > 0);
-
-            const growthProducts = productChanges.filter(p => p.diff > 0).sort((a,b) => b.diff - a.diff);
-            const declineProducts = productChanges.filter(p => p.diff < 0).sort((a,b) => a.diff - b.diff);
-            renderProductTable('top-growth-products-table', growthProducts, true, activeStockMap);
-            renderProductTable('top-decline-products-table', declineProducts, true, activeStockMap);
-            renderProductTable('new-products-table', newProducts.sort((a,b) => b.current - a.current), false, activeStockMap);
-            renderProductTable('lost-products-table', lostProducts.sort((a,b) => b.history - a.history), false, activeStockMap);
         }
+
+        function updateStockView() {
+            const { sales: filteredSales, history: filteredHistory } = getStockFilteredData();
+            
+            const filial = stockFilialFilter.value;
+            const activeStockMap = getActiveStockMap(filial);
+
+            const allProductsInScope = new Map();
+            [...filteredSales, ...filteredHistory].forEach(s => {
+                if (!allProductsInScope.has(s.PRODUTO)) {
+                    allProductsInScope.set(s.PRODUTO, {
+                        code: s.PRODUTO,
+                        descricao: s.DESCRICAO,
+                        fornecedor: s.FORNECEDOR,
+                        codfor: s.CODFOR
+                    });
+                }
+            });
+
+            const productAnalysis = new Map();
+
+            allProductsInScope.forEach(product => {
+                const stock = activeStockMap.get(product.code) || 0;
+                
+                const productHistorySales = filteredHistory.filter(s => s.PRODUTO === product.code);
+                const salesByDay = new Map();
+                productHistorySales.forEach(s => {
+                    const date = formatDate(s.DTPED);
+                    if (date) {
+                        const currentQty = salesByDay.get(date) || 0;
+                        salesByDay.set(date, currentQty + s.QTVENDA_EMBALAGEM_MASTER);
+                    }
+                });
+                
+                const totalSold = productHistorySales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                const saleDays = salesByDay.size;
+                const dailyAvgSale = saleDays > 0 ? totalSold / saleDays : 0;
+                const monthlyAvgSale = dailyAvgSale * 22; 
+                const trendDays = dailyAvgSale > 0 ? (stock / dailyAvgSale) : Infinity;
+
+                const currentMonthSalesQty = filteredSales
+                    .filter(s => s.PRODUTO === product.code)
+                    .reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+
+                productAnalysis.set(product.code, {
+                    ...product,
+                    stock,
+                    monthlyAvgSale,
+                    trendDays,
+                    currentMonthSalesQty,
+                    hasHistory: productHistorySales.length > 0,
+                    soldThisMonth: currentMonthSalesQty > 0
+                });
+            });
+
+            const sortedAnalysis = [...productAnalysis.values()].sort((a, b) => {
+                const trendA = isFinite(a.trendDays) ? a.trendDays : 9999;
+                const trendB = isFinite(b.trendDays) ? b.trendDays : 9999;
+                return trendA - trendB;
+            });
+
+            stockAnalysisTableBody.innerHTML = sortedAnalysis.map(item => {
+                const trendText = isFinite(item.trendDays) ? `${Math.floor(item.trendDays)} dias` : 'N/A';
+                let trendColor = 'text-slate-400';
+                if (isFinite(item.trendDays)) {
+                    if (item.trendDays < 15) trendColor = 'text-red-400';
+                    else if (item.trendDays < 30) trendColor = 'text-yellow-400';
+                    else trendColor = 'text-green-400';
+                }
+
+                return `
+                    <tr class="hover:bg-slate-700/50">
+                        <td class="px-4 py-2 text-xs">(${item.code}) ${item.descricao}</td>
+                        <td class="px-4 py-2 text-xs">${item.fornecedor}</td>
+                        <td class="px-4 py-2 text-right text-xs">${item.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                        <td class="px-4 py-2 text-right text-xs">${item.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                        <td class="px-4 py-2 text-right text-xs font-bold ${trendColor}">${trendText}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            const growth = [];
+            const decline = [];
+            const newProducts = [];
+            const lostProducts = [];
+
+            productAnalysis.forEach(p => {
+                if (p.soldThisMonth && p.hasHistory) {
+                    if (p.currentMonthSalesQty > p.monthlyAvgSale) {
+                        growth.push(p);
+                    } else {
+                        decline.push(p);
+                    }
+                } else if (p.soldThisMonth && !p.hasHistory) {
+                    newProducts.push(p);
+                } else if (!p.soldThisMonth && p.hasHistory) {
+                    lostProducts.push(p);
+                }
+            });
+
+            const renderProductTable = (bodyElement, data, showVariation = true) => {
+                bodyElement.innerHTML = data.map(p => {
+                    const variation = p.monthlyAvgSale > 0 ? p.currentMonthSalesQty - p.monthlyAvgSale : p.currentMonthSalesQty;
+                    const colorClass = variation > 0 ? 'text-green-400' : 'text-red-400';
+                    return `
+                        <tr class="hover:bg-slate-700/50">
+                            <td class="px-2 py-1.5 text-xs">(${p.code}) ${p.descricao}</td>
+                            <td class="px-2 py-1.5 text-xs text-right">${p.currentMonthSalesQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            <td class="px-2 py-1.5 text-xs text-right">${p.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                            ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass}">${variation.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>` : ''}
+                            <td class="px-2 py-1.5 text-xs text-right">${p.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                        </tr>
+                    `;
+                }).join('');
+            };
+            
+            growth.sort((a,b) => (b.currentMonthSalesQty - b.monthlyAvgSale) - (a.currentMonthSalesQty - a.monthlyAvgSale));
+            decline.sort((a,b) => (a.currentMonthSalesQty - a.monthlyAvgSale) - (b.currentMonthSalesQty - b.monthlyAvgSale));
+            newProducts.sort((a,b) => b.currentMonthSalesQty - a.currentMonthSalesQty);
+            lostProducts.sort((a,b) => b.monthlyAvgSale - a.monthlyAvgSale);
+
+            renderProductTable(growthTableBody, growth);
+            renderProductTable(declineTableBody, decline);
+            renderProductTable(newProductsTableBody, newProducts, false);
+            renderProductTable(lostProductsTableBody, lostProducts, false);
+        }
+
+        // =================================================================
+        // || INÍCIO DAS FUNÇÕES DA PÁGINA DE INOVAÇÕES                 ||
+        // =================================================================
+
+        function getInnovationsFilteredData(options = {}) {
+            const { excludeFilter = null } = options;
+
+            const supervisor = innovationsSupervisorFilter.value;
+            const sellers = selectedInnovationsSellers;
+            const suppliers = selectedInnovationsSuppliers;
+            const products = selectedInnovationsProducts;
+            const city = innovationsCityFilter.value.trim();
+
+            const salesFilterFunction = s =>
+                (excludeFilter === 'supervisor' || !supervisor || s.SUPERV === supervisor) &&
+                (excludeFilter === 'seller' || sellers.length === 0 || sellers.includes(s.NOME)) &&
+                (excludeFilter === 'supplier' || suppliers.length === 0 || suppliers.includes(String(s.CODFOR))) &&
+                (excludeFilter === 'product' || products.length === 0 || products.includes(String(s.PRODUTO))) &&
+                (excludeFilter === 'city' || !city || (s.CIDADE && s.CIDADE.toLowerCase() === city.toLowerCase()));
+            
+            const clientFilterFunction = c => {
+                const clientRcas = c.rcas || [];
+                const rcasOfSupervisor = supervisor ? [...new Set(allSalesData.filter(s => s.SUPERV === supervisor).map(s => s.CODUSUR))] : [];
+                const rcasOfVendedor = sellers.length > 0 ? [...new Set(allSalesData.filter(s => sellers.includes(s.NOME)).map(s => s.CODUSUR))] : [];
+
+                const supervisorMatch = !supervisor || clientRcas.some(rca => rcasOfSupervisor.includes(rca));
+                const vendedorMatch = sellers.length === 0 || clientRcas.some(rca => rcasOfVendedor.includes(rca));
+                const cityMatch = !city || (c.cidade && c.cidade.toLowerCase() === city.toLowerCase());
+
+                return supervisorMatch && vendedorMatch && cityMatch;
+            };
+
+            return {
+                currentSales: allSalesData.filter(salesFilterFunction),
+                historySales: allHistoryData.filter(salesFilterFunction),
+                clients: allClientsData.filter(clientFilterFunction),
+            };
+        }
+
+        function updateInnovationsFilters() {
+            const productOptionsData = getInnovationsFilteredData({ excludeFilter: 'product' }).historySales;
+            updateProductFilter(innovationsProductFilterDropdown, innovationsProductFilterText, selectedInnovationsProducts, productOptionsData, 'innovations');
+            innovationsProductFilterText.textContent = selectedInnovationsProducts.length > 0 ? `${selectedInnovationsProducts.length} produtos selecionados` : 'Selecione um ou mais produtos';
+        }
+
+        function resetInnovationsFilters() {
+            innovationsSupervisorFilter.value = '';
+            innovationsCityFilter.value = '';
+            selectedInnovationsSellers = [];
+            selectedInnovationsSuppliers = [];
+            selectedInnovationsProducts = [];
+            updateSellerFilter('', innovationsVendedorFilterDropdown, innovationsVendedorFilterText, [], allSalesData);
+            updateSupplierFilter(innovationsSupplierFilterDropdown, innovationsSupplierFilterText, [], allSalesData, 'innovations');
+            updateInnovationsFilters();
+            updateInnovationsView();
+        }
+        
+        function updateInnovationsView() {
+            const filteredData = getInnovationsFilteredData();
+            const { clients, currentSales, historySales } = filteredData;
+            
+            // 1. CALCULAR A BASE DE CLIENTES ATIVOS COM A REGRA ESPECIAL
+            const activeClientsForCoverage = clients.filter(c => {
+                const rca1 = String(c.rca1 || '').trim();
+                const rca2 = String(c.rca2 || '').trim();
+                return rca1 && rca1 !== '53' && rca1 !== rca2;
+            });
+            const activeClientsCount = activeClientsForCoverage.length;
+            const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['Código']));
+            innovationsActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
+
+            // 2. LÓGICA DA TABELA E KPIs
+            const productsToAnalyze = selectedInnovationsProducts;
+
+            if (productsToAnalyze.length === 0) {
+                innovationsPlaceholder.classList.remove('hidden');
+                innovationsResults.classList.add('hidden');
+            } else {
+                innovationsPlaceholder.classList.add('hidden');
+                innovationsResults.classList.remove('hidden');
+
+                const tableData = [];
+                const historyMonthsCount = getUniqueMonthCount(historySales);
+                const activeStockMap = getActiveStockMap('ambas'); 
+
+                productsToAnalyze.forEach(productCode => {
+                    const productInfo = allSalesData.find(s => s.PRODUTO === productCode) || { DESCRICAO: `Produto ${productCode}`};
+
+                    const totalHistoryQty = historySales
+                        .filter(s => s.PRODUTO === productCode)
+                        .reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                    const avgMonthlySale = historyMonthsCount > 0 ? totalHistoryQty / historyMonthsCount : 0;
+
+                    const currentMonthSaleQty = currentSales
+                        .filter(s => s.PRODUTO === productCode)
+                        .reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                    
+                    const stockQty = activeStockMap.get(productCode) || 0;
+
+                    const clientsWhoBoughtProduct = new Set(
+                        currentSales.filter(s => s.PRODUTO === productCode && s.VLVENDA > 0).map(s => s.CODCLI)
+                    );
+                    
+                    const coveredClientsCount = [...clientsWhoBoughtProduct].filter(code => activeClientCodes.has(code)).length;
+                    const coverage = activeClientsCount > 0 ? (coveredClientsCount / activeClientsCount) * 100 : 0;
+
+                    tableData.push({
+                        descricao: `(${productCode}) ${productInfo.DESCRICAO}`,
+                        avgMonthlySale: avgMonthlySale,
+                        currentMonthSaleQty: currentMonthSaleQty,
+                        stockQty: stockQty,
+                        coverage: coverage,
+                    });
+                });
+
+                innovationsTableBody.innerHTML = tableData.map(item => `
+                    <tr class="hover:bg-slate-700/50">
+                        <td class="px-4 py-2 text-xs">${item.descricao}</td>
+                        <td class="px-4 py-2 text-right text-xs">${item.avgMonthlySale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                        <td class="px-4 py-2 text-right text-xs">${item.currentMonthSaleQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                        <td class="px-4 py-2 text-right text-xs">${item.stockQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                        <td class="px-4 py-2 text-right text-xs font-bold text-teal-300">${item.coverage.toFixed(2)}%</td>
+                    </tr>
+                `).join('');
+            }
+
+            // 3. ATUALIZAR KPI DE MAIOR COBERTURA
+            let topCoverage = { product: '-', coverage: 0 };
+            if (activeClientsCount > 0) {
+                const allProductsInScope = [...new Set(filteredData.currentSales.map(s => s.PRODUTO))];
+                allProductsInScope.forEach(productCode => {
+                    const clientsWhoBought = new Set(
+                        filteredData.currentSales.filter(s => s.PRODUTO === productCode && s.VLVENDA > 0).map(s => s.CODCLI)
+                    );
+                    const coveredCount = [...clientsWhoBought].filter(code => activeClientCodes.has(code)).length;
+                    const currentCoverage = (coveredCount / activeClientsCount) * 100;
+                    
+                    if (currentCoverage > topCoverage.coverage) {
+                        const productInfo = allSalesData.find(s => s.PRODUTO === productCode);
+                        topCoverage = {
+                            product: productInfo ? `(${productInfo.PRODUTO}) ${productInfo.DESCRICAO}` : `Produto ${productCode}`,
+                            coverage: currentCoverage
+                        };
+                    }
+                });
+            }
+            
+            innovationsTopCoverageProductKpi.textContent = topCoverage.product;
+            innovationsTopCoverageProductKpi.title = topCoverage.product;
+            innovationsTopCoverageValueKpi.textContent = `${topCoverage.coverage.toFixed(2)}%`;
+        }
+
+        // =================================================================
+        // || FIM DAS FUNÇÕES DA PÁGINA DE INOVAÇÕES                      ||
+        // =================================================================
 
         function renderKpiCards(kpis) {
             const container = document.getElementById('comparison-kpi-container');
@@ -2029,42 +2391,6 @@
             }).join('');
         }
         
-        function renderProductTable(elementId, data, showVariation, stockMap) {
-            const container = document.getElementById(elementId);
-            
-            let secondColumnTitle = 'Vendido (Atual)';
-            if (elementId === 'lost-products-table') {
-                secondColumnTitle = 'Média Trim. (Emb.)';
-            }
-
-            let header = `<th class="px-4 py-2">Produto</th><th class="px-4 py-2 text-right">${secondColumnTitle}</th>`;
-            if (showVariation) {
-                header += '<th class="px-4 py-2 text-right">Média Trim. (Emb.)</th><th class="px-4 py-2 text-right">Variação (Emb.)</th>';
-            }
-            header += '<th class="px-4 py-2 text-right">Estoque (Emb.)</th>';
-
-            const rows = data.map(item => {
-                const productName = `(${item.code}) ${item.product}`;
-                const formatNumber = (num) => num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                const stockQty = stockMap.get(String(item.code)) || 0;
-                
-                let rowHTML = `<tr class="hover:bg-slate-700/50">
-                                <td class="px-4 py-2 text-xs">${productName}</td>
-                                <td class="px-4 py-2 text-right text-xs">${formatNumber(item.current || item.history)}</td>`;
-                
-                if (showVariation) {
-                    const variation = item.diff;
-                    const colorClass = variation > 0 ? 'text-green-400' : 'text-red-400';
-                    rowHTML += `<td class="px-4 py-2 text-right text-xs">${formatNumber(item.history)}</td>
-                                <td class="px-4 py-2 text-right text-xs ${colorClass}">${formatNumber(variation)}</td>`;
-                }
-                
-                rowHTML += `<td class="px-4 py-2 text-right text-xs">${formatNumber(stockQty)}</td></tr>`;
-                return rowHTML;
-            }).join('');
-            container.innerHTML = `<table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr>${header}</tr></thead><tbody class="divide-y divide-slate-700">${rows}</tbody></table>`;
-        }
-
         function openModal(pedidoId) {
             const orderInfo = aggregatedOrders.find(order => order.PEDIDO == pedidoId);
             const itemsDoPedido = allSalesData.filter(item => item.PEDIDO == pedidoId);
@@ -2155,10 +2481,12 @@
             const mainRedeFilterWrapper = document.getElementById('main-rede-filter-wrapper');
             const cityRedeFilterWrapper = document.getElementById('city-rede-filter-wrapper');
             const comparisonRedeFilterWrapper = document.getElementById('comparison-rede-filter-wrapper');
+            const stockRedeFilterWrapper = document.getElementById('stock-rede-filter-wrapper');
 
             if (mainRedeFilterWrapper) mainRedeFilterWrapper.style.display = hasRedeData ? '' : 'none';
             if (cityRedeFilterWrapper) cityRedeFilterWrapper.style.display = hasRedeData ? '' : 'none';
             if (comparisonRedeFilterWrapper) comparisonRedeFilterWrapper.style.display = hasRedeData ? '' : 'none';
+            if (stockRedeFilterWrapper) stockRedeFilterWrapper.style.display = hasRedeData ? '' : 'none';
         }
 
         function debounce(func, delay = 250) {
@@ -2175,11 +2503,14 @@
             viewTableBtn.addEventListener('click', () => { chartView.classList.add('hidden'); tableView.classList.remove('hidden'); viewTableBtn.classList.add('hidden'); viewChartBtn.classList.remove('hidden'); updateAllVisuals(); });
             viewChartBtn.addEventListener('click', () => { tableView.classList.add('hidden'); chartView.classList.remove('hidden'); viewChartBtn.classList.add('hidden'); viewTableBtn.classList.remove('hidden'); updateAllVisuals(); });
             viewComparisonBtn.addEventListener('click', () => { mainDashboard.classList.add('hidden'); comparisonView.classList.remove('hidden'); updateAllComparisonFilters(); updateComparisonView(); });
+            viewStockBtn.addEventListener('click', () => { mainDashboard.classList.add('hidden'); stockView.classList.remove('hidden'); updateStockView(); }); 
             showCityBtn.addEventListener('click', () => { resetMainFilters(); mainDashboard.classList.add('hidden'); cityView.classList.remove('hidden'); document.getElementById('city-view-content').classList.add('hidden'); document.getElementById('city-view-loader').classList.remove('hidden'); setTimeout(() => { populateSupervisors('city-supervisor-filter', allSalesData); selectedCitySellers = updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData); updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData); updateCityView(); document.getElementById('city-view-loader').classList.add('hidden'); document.getElementById('city-view-content').classList.remove('hidden'); }, 10); });
             backToMainFromCityBtn.addEventListener('click', () => { resetCityFilters(); cityView.classList.add('hidden'); mainDashboard.classList.remove('hidden'); updateAllVisuals(); });
             showWeeklyBtn.addEventListener('click', () => { resetMainFilters(); mainDashboard.classList.add('hidden'); weeklyView.classList.remove('hidden'); populateWeeklyFilters(); updateWeeklyView(); });
             backToMainFromWeeklyBtn.addEventListener('click', () => { weeklyView.classList.add('hidden'); mainDashboard.classList.remove('hidden'); currentWeeklyFornecedor = ''; updateAllVisuals(); });
             backToMainFromComparisonBtn.addEventListener('click', () => { comparisonView.classList.add('hidden'); mainDashboard.classList.remove('hidden'); updateAllVisuals(); });
+            backToMainFromStockBtn.addEventListener('click', () => { stockView.classList.add('hidden'); mainDashboard.classList.remove('hidden'); updateAllVisuals(); }); 
+            
             supervisorFilter.addEventListener('change', () => { selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateAllVisuals(); });
             vendedorFilterBtn.addEventListener('click', () => vendedorFilterDropdown.classList.toggle('hidden'));
             vendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedSellers.push(value); else selectedSellers = selectedSellers.filter(s => s !== value); selectedSellers = updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateAllVisuals(); } });
@@ -2266,11 +2597,17 @@
                 if (!comparisonVendedorFilterBtn.contains(e.target) && !comparisonVendedorFilterDropdown.contains(e.target)) comparisonVendedorFilterDropdown.classList.add('hidden'); 
                 if (!comparisonSupplierFilterBtn.contains(e.target) && !comparisonSupplierFilterDropdown.contains(e.target)) comparisonSupplierFilterDropdown.classList.add('hidden'); 
                 if (!comparisonProductFilterBtn.contains(e.target) && !comparisonProductFilterDropdown.contains(e.target)) comparisonProductFilterDropdown.classList.add('hidden');
+                if (!stockComRedeBtn.contains(e.target) && !stockRedeFilterDropdown.contains(e.target)) stockRedeFilterDropdown.classList.add('hidden');
+                if (!stockVendedorFilterBtn.contains(e.target) && !stockVendedorFilterDropdown.contains(e.target)) stockVendedorFilterDropdown.classList.add('hidden');
+                if (!stockSupplierFilterBtn.contains(e.target) && !stockSupplierFilterDropdown.contains(e.target)) stockSupplierFilterDropdown.classList.add('hidden');
+                if (!stockProductFilterBtn.contains(e.target) && !stockProductFilterDropdown.contains(e.target)) stockProductFilterDropdown.classList.add('hidden');
                 if (e.target.closest('[data-pedido-id]')) { e.preventDefault(); openModal(e.target.closest('[data-pedido-id]').dataset.pedidoId); } 
                 if (e.target.closest('[data-codcli]')) { e.preventDefault(); openClientModal(e.target.closest('[data-codcli]').dataset.codcli); } 
                 if (e.target.closest('#city-suggestions > div')) { cityNameFilter.value = e.target.textContent; citySuggestions.classList.add('hidden'); updateCityView(); } 
                 if (e.target.closest('#comparison-city-suggestions > div')) { comparisonCityFilter.value = e.target.textContent; comparisonCitySuggestions.classList.add('hidden'); updateAllComparisonFilters(); updateComparisonView(); } 
                 else if (!comparisonCityFilter.contains(e.target)) comparisonCitySuggestions.classList.add('hidden'); 
+                if (e.target.closest('#stock-city-suggestions > div')) { stockCityFilter.value = e.target.textContent; stockCitySuggestions.classList.add('hidden'); updateStockView(); } 
+                else if (!stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden'); 
             });
 
             fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } populateSupervisors('supervisor-filter', allSalesData); selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateAllVisuals(); }); });
@@ -2284,12 +2621,11 @@
             };
 
             comparisonSupervisorFilter.addEventListener('change', handleComparisonFilterChange);
-            filialFilter.addEventListener('change', handleComparisonFilterChange);
             comparisonVendedorFilterBtn.addEventListener('click', () => comparisonVendedorFilterDropdown.classList.toggle('hidden'));
             comparisonVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedComparisonSellers.push(value); else selectedComparisonSellers = selectedComparisonSellers.filter(s => s !== value); handleComparisonFilterChange(); } });
             comparisonFornecedorToggleContainer.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') { const fornecedor = e.target.dataset.fornecedor; if (currentComparisonFornecedor === fornecedor) { currentComparisonFornecedor = ''; e.target.classList.remove('active'); } else { currentComparisonFornecedor = fornecedor; comparisonFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); } handleComparisonFilterChange(); } });
             comparisonSupplierFilterBtn.addEventListener('click', () => comparisonSupplierFilterDropdown.classList.toggle('hidden'));
-            comparisonSupplierFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedComparisonSuppliers.push(value); else selectedComparisonSuppliers = selectedComparisonSuppliers.filter(s => s !== value); handleComparisonFilterChange(); } });
+            comparisonSupplierFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox' && e.target.dataset.filterType === 'comparison') { const { value, checked } = e.target; if (checked) selectedComparisonSuppliers.push(value); else selectedComparisonSuppliers = selectedComparisonSuppliers.filter(s => s !== value); handleComparisonFilterChange(); } });
             
             comparisonComRedeBtn.addEventListener('click', () => comparisonRedeFilterDropdown.classList.toggle('hidden'));
             comparisonRedeGroupContainer.addEventListener('click', (e) => {
@@ -2322,40 +2658,114 @@
             });
 
             comparisonCityFilter.addEventListener('input', () => {
-                const cityOptionsData = getComparisonFilteredData('city');
+                const cityOptionsData = getComparisonFilteredData({ excludeFilter: 'city' }).historySales;
                 updateComparisonCitySuggestions(cityOptionsData);
             });
             comparisonCityFilter.addEventListener('focus', () => {
-                const cityOptionsData = getComparisonFilteredData('city');
+                const cityOptionsData = getComparisonFilteredData({ excludeFilter: 'city' }).historySales;
                 updateComparisonCitySuggestions(cityOptionsData);
             });
             comparisonCityFilter.addEventListener('change', handleComparisonFilterChange); 
 
             clearComparisonFiltersBtn.addEventListener('click', resetComparisonFilters);
             
+            const handleProductFilterChange = (e, selectedArray) => {
+                 if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedArray.includes(value)) selectedArray.push(value);
+                    } else {
+                        const index = selectedArray.indexOf(value);
+                        if (index > -1) selectedArray.splice(index, 1);
+                    }
+                    return true;
+                }
+                return false;
+            }
+
             comparisonProductFilterBtn.addEventListener('click', () => {
                 updateComparisonProductFilter();
                 comparisonProductFilterDropdown.classList.toggle('hidden');
             });
-
-            const debouncedProductSearch = debounce(updateComparisonProductFilter, 250);
+            const debouncedComparisonProductSearch = debounce(updateComparisonProductFilter, 250);
             comparisonProductFilterDropdown.addEventListener('input', (e) => {
                 if (e.target.id === 'comparison-product-search-input') {
-                    debouncedProductSearch();
+                    debouncedComparisonProductSearch();
+                }
+            });
+            comparisonProductFilterDropdown.addEventListener('change', (e) => {
+                if(e.target.dataset.filterType === 'comparison' && handleProductFilterChange(e, selectedComparisonProducts)) {
+                    handleComparisonFilterChange();
+                    updateComparisonProductFilter();
                 }
             });
 
-            comparisonProductFilterDropdown.addEventListener('change', (e) => {
-                if (e.target.type === 'checkbox') {
-                    const { value, checked } = e.target;
-                    if (checked) {
-                        if (!selectedComparisonProducts.includes(value)) selectedComparisonProducts.push(value);
-                    } else {
-                        selectedComparisonProducts = selectedComparisonProducts.filter(code => code !== value);
+            // NOVOS EVENT LISTENERS PARA A TELA DE ESTOQUE
+            const handleStockFilterChange = () => {
+                const supervisorOptionsData = getStockFilteredData({ excludeFilter: 'supervisor' }).history;
+                populateSupervisors('stock-supervisor-filter', supervisorOptionsData);
+                updateStockSellerFilter();
+                updateStockSupplierFilter();
+                updateStockProductFilter();
+                updateStockCitySuggestions(getStockFilteredData({excludeFilter: 'city'}).sales);
+                updateStockView();
+            };
+
+            stockFilialFilter.addEventListener('change', handleStockFilterChange);
+            clearStockFiltersBtn.addEventListener('click', resetStockFilters);
+            stockFornecedorToggleContainer.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') { const fornecedor = e.target.dataset.fornecedor; if (currentStockFornecedor === fornecedor) { currentStockFornecedor = ''; e.target.classList.remove('active'); } else { currentStockFornecedor = fornecedor; stockFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); } handleStockFilterChange(); } });
+            stockSupervisorFilter.addEventListener('change', handleStockFilterChange);
+            stockVendedorFilterBtn.addEventListener('click', () => stockVendedorFilterDropdown.classList.toggle('hidden'));
+            stockVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedStockSellers.push(value); else selectedStockSellers = selectedStockSellers.filter(s => s !== value); handleStockFilterChange(); } });
+            stockSupplierFilterBtn.addEventListener('click', () => stockSupplierFilterDropdown.classList.toggle('hidden'));
+            stockSupplierFilterDropdown.addEventListener('change', (e) => { if (e.target.dataset.filterType === 'stock' && e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) { if(!selectedStockSuppliers.includes(value)) selectedStockSuppliers.push(value); } else { selectedStockSuppliers = selectedStockSuppliers.filter(s => s !== value); } handleStockFilterChange(); } });
+            stockCityFilter.addEventListener('input', () => updateStockCitySuggestions(getStockFilteredData({excludeFilter: 'city'}).sales));
+            stockCityFilter.addEventListener('focus', () => updateStockCitySuggestions(getStockFilteredData({excludeFilter: 'city'}).sales));
+            stockCityFilter.addEventListener('change', handleStockFilterChange); 
+
+            stockComRedeBtn.addEventListener('click', () => stockRedeFilterDropdown.classList.toggle('hidden'));
+            stockRedeGroupContainer.addEventListener('click', (e) => {
+                if(e.target.closest('button')) {
+                    const button = e.target.closest('button');
+                    stockRedeGroupFilter = button.dataset.group;
+                    stockRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    button.classList.add('active');
+                    if (stockRedeGroupFilter !== 'com_rede') {
+                        stockRedeFilterDropdown.classList.add('hidden');
+                        selectedStockRedes = [];
                     }
-                    handleComparisonFilterChange();
+                    updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
+                    handleStockFilterChange();
                 }
             });
+            stockRedeFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) selectedStockRedes.push(value);
+                    else selectedStockRedes = selectedStockRedes.filter(r => r !== value);
+                    selectedStockRedes = updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
+                    handleStockFilterChange();
+                }
+            });
+
+
+            stockProductFilterBtn.addEventListener('click', () => {
+                updateStockProductFilter();
+                stockProductFilterDropdown.classList.toggle('hidden');
+            });
+            const debouncedStockProductSearch = debounce(updateStockProductFilter, 250);
+            stockProductFilterDropdown.addEventListener('input', (e) => {
+                if (e.target.id === 'stock-product-search-input') {
+                    debouncedStockProductSearch();
+                }
+            });
+            stockProductFilterDropdown.addEventListener('change', (e) => {
+                 if(e.target.dataset.filterType === 'stock' && handleProductFilterChange(e, selectedStockProducts)) {
+                    handleStockFilterChange();
+                    updateStockProductFilter();
+                }
+            });
+
 
             comparisonTendencyToggle.addEventListener('click', () => { 
                 useTendencyComparison = !useTendencyComparison; 
@@ -2432,19 +2842,110 @@
             clientModalCloseBtn.addEventListener('click', () => clientModal.classList.add('hidden'));
             faturamentoBtn.addEventListener('click', () => { currentProductMetric = 'faturamento'; faturamentoBtn.classList.add('active'); pesoBtn.classList.remove('active'); updateAllVisuals(); });
             pesoBtn.addEventListener('click', () => { currentProductMetric = 'peso'; pesoBtn.classList.add('active'); faturamentoBtn.classList.remove('active'); updateAllVisuals(); });
+
+            // --- Event Listeners da Página de Inovações ---
+            viewInnovationsBtn.addEventListener('click', () => {
+                mainDashboard.classList.add('hidden');
+                innovationsView.classList.remove('hidden');
+                populateSupervisors('innovations-supervisor-filter', allSalesData);
+                updateSellerFilter('', innovationsVendedorFilterDropdown, innovationsVendedorFilterText, [], allSalesData);
+                updateSupplierFilter(innovationsSupplierFilterDropdown, innovationsSupplierFilterText, [], allSalesData, 'innovations');
+                updateInnovationsFilters(); 
+                updateInnovationsView();
+            });
+
+            backToMainFromInnovationsBtn.addEventListener('click', () => {
+                innovationsView.classList.add('hidden');
+                mainDashboard.classList.remove('hidden');
+                updateAllVisuals();
+            });
+
+            const handleInnovationsFilterChange = () => {
+                updateInnovationsFilters();
+                updateInnovationsView();
+            };
+
+            innovationsSupervisorFilter.addEventListener('change', () => {
+                selectedInnovationsSellers = [];
+                updateSellerFilter(innovationsSupervisorFilter.value, innovationsVendedorFilterDropdown, innovationsVendedorFilterText, selectedInnovationsSellers, allSalesData);
+                handleInnovationsFilterChange();
+            });
+            innovationsCityFilter.addEventListener('change', handleInnovationsFilterChange);
+            clearInnovationsFiltersBtn.addEventListener('click', resetInnovationsFilters);
+
+            innovationsVendedorFilterBtn.addEventListener('click', () => innovationsVendedorFilterDropdown.classList.toggle('hidden'));
+            innovationsVendedorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedInnovationsSellers.includes(value)) selectedInnovationsSellers.push(value);
+                    } else {
+                        selectedInnovationsSellers = selectedInnovationsSellers.filter(s => s !== value);
+                    }
+                    updateSellerFilter(innovationsSupervisorFilter.value, innovationsVendedorFilterDropdown, innovationsVendedorFilterText, selectedInnovationsSellers, allSalesData);
+                    handleInnovationsFilterChange();
+                }
+            });
+
+            innovationsSupplierFilterBtn.addEventListener('click', () => innovationsSupplierFilterDropdown.classList.toggle('hidden'));
+            innovationsSupplierFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox' && e.target.dataset.filterType === 'innovations') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedInnovationsSuppliers.includes(value)) selectedInnovationsSuppliers.push(value);
+                    } else {
+                        selectedInnovationsSuppliers = selectedInnovationsSuppliers.filter(s => s !== value);
+                    }
+                    updateSupplierFilter(innovationsSupplierFilterDropdown, innovationsSupplierFilterText, selectedInnovationsSuppliers, allSalesData, 'innovations');
+                    handleInnovationsFilterChange();
+                }
+            });
+
+            innovationsProductFilterBtn.addEventListener('click', () => {
+                updateInnovationsFilters();
+                innovationsProductFilterDropdown.classList.toggle('hidden');
+            });
+
+            const debouncedInnovationsProductSearch = debounce(updateInnovationsFilters, 250);
+
+            innovationsProductFilterDropdown.addEventListener('input', (e) => {
+                if (e.target.id === 'innovations-product-search-input') {
+                    debouncedInnovationsProductSearch();
+                }
+            });
+
+            innovationsProductFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.dataset.filterType === 'innovations' && handleProductFilterChange(e, selectedInnovationsProducts)) {
+                    handleInnovationsFilterChange();
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!innovationsVendedorFilterBtn.contains(e.target) && !innovationsVendedorFilterDropdown.contains(e.target)) innovationsVendedorFilterDropdown.classList.add('hidden');
+                if (!innovationsSupplierFilterBtn.contains(e.target) && !innovationsSupplierFilterDropdown.contains(e.target)) innovationsSupplierFilterDropdown.classList.add('hidden');
+                if (!innovationsProductFilterBtn.contains(e.target) && !innovationsProductFilterDropdown.contains(e.target)) innovationsProductFilterDropdown.classList.add('hidden');
+            });
         }
         
         calculateHistoricalBests();
         populateSupervisors('supervisor-filter', allSalesData);
         populateSupervisors('city-supervisor-filter', allSalesData);
+        populateSupervisors('stock-supervisor-filter', allSalesData);
         updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
         updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
         
         updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
         updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData);
         updateRedeFilter(comparisonRedeFilterDropdown, comparisonComRedeBtnText, selectedComparisonRedes, allClientsData);
+        updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
         
         updateAllComparisonFilters();
+        
+        // Inicializar filtros de estoque
+        updateStockSellerFilter();
+        updateStockSupplierFilter();
+        updateStockProductFilter();
+        updateStockCitySuggestions(allSalesData);
         
         initializeRedeFilters();
         setupEventListeners();
@@ -2452,14 +2953,12 @@
         renderTable(aggregatedOrders);
     </script>
 
-    <!-- SCRIPT DA PÁGINA PRINCIPAL (UI) -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const salesFileInput = document.getElementById('sales-file-input');
             const clientsFileInput = document.getElementById('clients-file-input');
             const productsFileInput = document.getElementById('products-file-input');
             const historyFileInput = document.getElementById('history-file-input');
-            const stockFileInput = document.getElementById('stock-file-input');
             const generateBtn = document.getElementById('generate-btn');
             
             const statusContainer = document.getElementById('status-container');
@@ -2472,7 +2971,7 @@
             let files = {};
 
             const checkFiles = () => {
-                generateBtn.disabled = !(files.salesFile && files.clientsFile && files.productsFile && files.historyFile && files.stockFile);
+                generateBtn.disabled = !(files.salesFile && files.clientsFile && files.productsFile && files.historyFile);
                 downloadContainer.classList.add('hidden');
             };
 
@@ -2480,7 +2979,6 @@
             clientsFileInput.addEventListener('change', (e) => { files.clientsFile = e.target.files[0]; checkFiles(); });
             productsFileInput.addEventListener('change', (e) => { files.productsFile = e.target.files[0]; checkFiles(); });
             historyFileInput.addEventListener('change', (e) => { files.historyFile = e.target.files[0]; checkFiles(); });
-            stockFileInput.addEventListener('change', (e) => { files.stockFile = e.target.files[0]; checkFiles(); });
 
             const workerScript = document.getElementById('worker-script').textContent;
             const workerBlob = new Blob([workerScript], { type: 'application/javascript' });
@@ -2508,15 +3006,20 @@
             };
 
             generateBtn.addEventListener('click', () => {
-                if (!files.salesFile || !files.clientsFile || !files.productsFile || !files.historyFile || !files.stockFile) return;
+                if (!files.salesFile || !files.clientsFile || !files.productsFile || !files.historyFile) return;
                 
                 generateBtn.disabled = true;
                 statusContainer.classList.remove('hidden');
                 statusText.textContent = 'A iniciar o processamento...';
                 progressBar.style.width = '0%';
                 downloadContainer.classList.add('hidden');
-
-                worker.postMessage(files);
+                
+                worker.postMessage({
+                    salesFile: files.salesFile,
+                    clientsFile: files.clientsFile,
+                    productsFile: files.productsFile,
+                    historyFile: files.historyFile
+                });
             });
 
             function generateReportFile(data) {
@@ -2539,7 +3042,7 @@
                         <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>
                         <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"><\/script>
                         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-                        <style> body { font-family: 'Inter', sans-serif; } ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #0f172a; } ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; } ::-webkit-scrollbar-corner { background: #0f172a; } .sticky-header th { position: sticky; top: 0; z-index: 10; background-color: #1e293b; } .hidden { display: none; } .metric-btn.active, .fornecedor-btn.active, .comparison-toggle-btn.active, .group-btn.active, #main-rede-group-container > div > button.active, #city-rede-group-container > div > button.active, #comparison-rede-group-container > div > button.active { background-color: #0d9488; color: #FFF; } .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; } .tooltip { position: relative; display: inline-block; cursor: pointer; } .tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #1e293b; color: #fff; border-radius: 6px; padding: 8px; position: absolute; z-index: 1001; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; pointer-events: none; } .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; } .custom-scrollbar::-webkit-scrollbar { width: 8px; } .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; } .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 10px; } </style>
+                        <style> body { font-family: 'Inter', sans-serif; } ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #0f172a; } ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; } ::-webkit-scrollbar-corner { background: #0f172a; } .sticky-header th { position: sticky; top: 0; z-index: 10; background-color: #1e293b; } .hidden { display: none; } .metric-btn.active, .fornecedor-btn.active, .comparison-toggle-btn.active, .group-btn.active, #main-rede-group-container > div > button.active, #city-rede-group-container > div > button.active, #comparison-rede-group-container > div > button.active, #stock-rede-group-container > div > button.active { background-color: #0d9488; color: #FFF; } .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; } .tooltip { position: relative; display: inline-block; cursor: pointer; } .tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #1e293b; color: #fff; border-radius: 6px; padding: 8px; position: absolute; z-index: 1001; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; pointer-events: none; } .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; } .custom-scrollbar::-webkit-scrollbar { width: 8px; } .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; } .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 10px; } </style>
                     </head>
                     <body class="bg-slate-900 text-slate-200 antialiased">
                         <div id="main-dashboard">
@@ -2550,7 +3053,7 @@
                                 </header>
                                 <div class="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
                                     <div id="fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2"><button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button><button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button></div>
-                                    <div class="flex gap-2 w-full sm:w-auto"><button id="viewChartBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Ver Gráficos</button><button id="viewTableBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hidden">Ver Tabela</button><button id="viewComparisonBtn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg">Ver Comparativo</button></div>
+                                    <div class="flex gap-2 w-full sm:w-auto"><button id="viewChartBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Ver Gráficos</button><button id="viewTableBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hidden">Ver Tabela</button><button id="viewComparisonBtn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg">Ver Comparativo</button><button id="viewStockBtn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Estoque</button></div>
                                 </div>
                                 <div id="main-filters" class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md">
                                     <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
@@ -2574,7 +3077,7 @@
                                     </div>
                                 </div>
                                 <main id="app-container">
-                                    <div id="chartView" class="hidden">
+                                    <div id="chartView" class="">
                                         <div class="mb-6 bg-slate-800 p-4 rounded-lg">
                                             <div class="flex justify-between items-center mb-4">
                                                 <div class="w-1/3">
@@ -2590,9 +3093,13 @@
                                         </div>
                                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-slate-800 p-4 rounded-lg"><h2 id="sales-by-person-title" class="text-lg font-semibold text-white mb-4 text-center">Vendas por Supervisor</h2><div id="salesByPersonChartContainer" class="relative h-80"></div></div><div class="bg-slate-800 p-4 rounded-lg"><h2 id="faturamentoPorFornecedorTitle" class="text-lg font-semibold text-white mb-4 text-center">Faturamento por Categoria</h2><div id="faturamentoPorFornecedorChartContainer" class="relative h-80"></div></div></div>
                                         <div class="mt-6 bg-slate-800 p-4 rounded-lg"><div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white">Vendas por Produto</h2><div class="bg-slate-700 rounded-lg p-1 flex"><button id="faturamentoBtn" class="metric-btn active px-3 py-1 text-sm rounded-md">Faturamento</button><button id="pesoBtn" class="metric-btn px-3 py-1 text-sm rounded-md">Peso Kg</button></div></div><div id="salesByProductBarChartContainer" class="relative h-80"></div></div>
-                                        <div class="mt-6 space-y-3"><button id="show-weekly-btn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg">Gráficos Semanais</button><button id="show-city-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg">Gráficos por Cidade</button></div>
+                                        <div class="mt-6 space-y-3">
+                                            <button id="show-weekly-btn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg">Gráficos Semanais</button>
+                                            <button id="show-city-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg">Gráficos por Cidade</button>
+                                            <button id="viewInnovationsBtn" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-lg">Inovações</button>
+                                        </div>
                                     </div>
-                                    <div id="tableView" class=""><div class="overflow-x-auto bg-slate-800 rounded-lg" style="max-height: 60vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Nº Pedido</th><th class="px-4 py-3">Cód. Cliente</th><th class="px-4 py-3">Vendedor</th><th class="px-4 py-3">Fornecedor</th><th class="px-4 py-3">Data Pedido</th><th class="px-4 py-3">Data Fat.</th><th class="px-4 py-3 text-right">Peso Total</th><th class="px-4 py-3 text-right">Faturamento Total</th><th class="px-4 py-3 text-center">Posição</th></tr></thead><tbody id="report-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
+                                    <div id="tableView" class="hidden"><div class="overflow-x-auto bg-slate-800 rounded-lg" style="max-height: 60vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Nº Pedido</th><th class="px-4 py-3">Cód. Cliente</th><th class="px-4 py-3">Vendedor</th><th class="px-4 py-3">Fornecedor</th><th class="px-4 py-3">Data Pedido</th><th class="px-4 py-3">Data Fat.</th><th class="px-4 py-3 text-right">Peso Total</th><th class="px-4 py-3 text-right">Faturamento Total</th><th class="px-4 py-3 text-center">Posição</th></tr></thead><tbody id="report-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
                                 </main>
                             </div>
                         </div>
@@ -2705,8 +3212,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end border-t border-slate-700 pt-4 mt-4">
-                                    <div><label for="filial-filter" class="block mb-2 text-sm font-medium text-slate-300">Filtrar Estoque Filial</label><select id="filial-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end border-t border-slate-700 pt-4 mt-4">
                                     <div class="flex items-end"><div class="w-full"><label for="comparison-holiday-picker-btn" class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label><button id="comparison-holiday-picker-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left">Selecionar Feriados</button></div></div>
                                     <button id="comparison-tendency-toggle" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 px-4 rounded-lg">Calcular Tendência</button>
                                     <button id="clear-comparison-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
@@ -2732,10 +3238,237 @@
                                     <div id="dailyWeeklyComparisonChartContainer" class="relative h-96"></div>
                                 </div>
                                 <div class="bg-slate-800 p-4 rounded-lg"><h2 class="text-lg font-semibold text-white text-center mb-4">Variação de Faturamento por Supervisor</h2><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Supervisor</th><th class="px-4 py-3 text-right">Média Trim.</th><th class="px-4 py-3 text-right">Fat. Mês Atual</th><th class="px-4 py-3 text-right">Variação</th></tr></thead><tbody id="supervisorComparisonTableBody" class="divide-y divide-slate-700"></tbody></table></div></div>
-                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-slate-800 p-4 rounded-lg"><h2 class="text-lg font-semibold text-white text-center mb-4">Produtos com Crescimento</h2><div id="top-growth-products-table" class="overflow-x-auto" style="max-height: 40vh;"></div></div><div class="bg-slate-800 p-4 rounded-lg"><h2 class="text-lg font-semibold text-white text-center mb-4">Produtos com Queda</h2><div id="top-decline-products-table" class="overflow-x-auto" style="max-height: 40vh;"></div></div></div>
-                                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-slate-800 p-4 rounded-lg"><h2 class="text-lg font-semibold text-white text-center mb-4">Novos - Vendidos este Mês</h2><div id="new-products-table" class="overflow-x-auto" style="max-height: 40vh;"></div></div><div class="bg-slate-800 p-4 rounded-lg"><h2 class="text-lg font-semibold text-white text-center mb-4">Perdidos - Não vendidos este Mês</h2><div id="lost-products-table" class="overflow-x-auto" style="max-height: 40vh;"></div></div></div>
                             </div>
                         </div>
+                        <div id="stock-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+                            <div class="flex justify-between items-center mb-6">
+                                <div><h1 class="text-2xl font-bold text-white"><span style="color: #FFC000;">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Estoque</p></div>
+                                <button id="back-to-main-from-stock-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
+                            </div>
+                            <div class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md">
+                                <div id="stock-rede-filter-wrapper" class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
+                                    <div class="relative w-full sm:w-1/2">
+                                        <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
+                                        <div id="stock-rede-group-container" class="inline-flex rounded-md shadow-sm w-full" role="group">
+                                            <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-l-lg hover:bg-slate-500 flex-1">Todos</button>
+                                            <button type="button" data-group="com_rede" id="stock-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 hover:bg-slate-500 border-t border-b border-slate-700 flex items-center justify-center gap-2 flex-1">
+                                                <span id="stock-com-rede-btn-text">Com Rede</span>
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                            </button>
+                                            <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-r-lg hover:bg-slate-500 flex-1">Sem Rede</button>
+                                        </div>
+                                        <div id="stock-rede-filter-dropdown" class="hidden absolute z-20 w-full mt-1 top-full left-0 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
+                                    </div>
+                                    <div class="w-full sm:w-1/2">
+                                        <label class="block mb-2 text-sm font-medium text-slate-300">Pasta</label>
+                                        <div id="stock-fornecedor-toggle-container" class="w-full rounded-lg p-1 flex justify-center gap-2">
+                                            <button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1">PEPSICO</button>
+                                            <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1">MULTIMARCAS</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                    <div>
+                                        <label for="stock-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
+                                        <select id="stock-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
+                                            <option value="">Todos</option>
+                                        </select>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="stock-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label>
+                                        <button id="stock-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="stock-vendedor-filter-text">Todos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="stock-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="stock-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Fornecedor</label>
+                                        <button id="stock-supplier-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="stock-supplier-filter-text">Todos Fornecedores</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="stock-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="stock-city-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label>
+                                        <input type="text" id="stock-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white" autocomplete="off">
+                                        <div id="stock-city-suggestions" class="absolute z-10 w-full bg-slate-700 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                                    <div class="lg:col-span-2 relative">
+                                        <label for="stock-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Produto</label>
+                                        <button id="stock-product-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="stock-product-filter-text">Todos os Produtos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="stock-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg">
+                                            <div class="p-2 border-b border-slate-600">
+                                                <input type="text" id="stock-product-search-input" placeholder="Buscar produto..." class="bg-slate-800 text-xs rounded-lg block w-full p-2 border border-slate-600 placeholder-slate-400 text-white">
+                                            </div>
+                                            <div id="stock-product-list" class="max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label for="stock-filial-filter" class="block mb-2 text-sm font-medium text-slate-300">Filtrar Estoque Filial</label>
+                                        <select id="stock-filial-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
+                                            <option value="ambas" selected>Ambas</option>
+                                            <option value="05">Filial 05</option>
+                                            <option value="08">Filial 08</option>
+                                        </select>
+                                    </div>
+                                    <button id="clear-stock-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+                                </div>
+                            </div>
+                            <div class="bg-slate-800 p-4 rounded-lg mb-6">
+                                <h2 class="text-lg font-semibold text-white text-center mb-4">Análise de Estoque e Tendência de Saída</h2>
+                                <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
+                                    <table class="min-w-full text-sm text-left">
+                                        <thead class="text-xs text-slate-300 uppercase sticky-header">
+                                            <tr>
+                                                <th class="px-4 py-3">Produto</th>
+                                                <th class="px-4 py-3">Fornecedor</th>
+                                                <th class="px-4 py-3 text-right">Estoque Atual (Emb.)</th>
+                                                <th class="px-4 py-3 text-right">Venda Média Mensal (Emb.)</th>
+                                                <th class="px-4 py-3 text-right">Tendência (Dias)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="stock-analysis-table-body" class="divide-y divide-slate-700"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div class="bg-slate-800 p-4 rounded-lg">
+                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Produtos com Crescimento</h2>
+                                    <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
+                                        <table class="min-w-full text-sm">
+                                            <thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Variação</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead>
+                                            <tbody id="growth-table-body" class="divide-y divide-slate-700"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="bg-slate-800 p-4 rounded-lg">
+                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Produtos com Queda</h2>
+                                    <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
+                                        <table class="min-w-full text-sm">
+                                            <thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Variação</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead>
+                                            <tbody id="decline-table-body" class="divide-y divide-slate-700"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="bg-slate-800 p-4 rounded-lg">
+                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Novos - Vendidos este Mês</h2>
+                                    <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
+                                        <table class="min-w-full text-sm">
+                                            <thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead>
+                                            <tbody id="new-products-table-body" class="divide-y divide-slate-700"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="bg-slate-800 p-4 rounded-lg">
+                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Perdidos - Não vendidos este Mês</h2>
+                                    <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
+                                        <table class="min-w-full text-sm">
+                                            <thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead>
+                                            <tbody id="lost-products-table-body" class="divide-y divide-slate-700"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- INÍCIO DA VIEW DE INOVAÇÕES -->
+                        <div id="innovations-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+                            <div class="flex justify-between items-center mb-6">
+                                <div><h1 class="text-2xl font-bold text-white"><span style="color: #FFC000;">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Inovações</p></div>
+                                <button id="back-to-main-from-innovations-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
+                            </div>
+                            
+                            <!-- KPIs Principais -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div class="bg-slate-800 p-6 rounded-lg text-center">
+                                    <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Base para Cobertura)</p>
+                                    <p id="innovations-active-clients-kpi" class="text-4xl font-bold text-teal-400 my-2">0</p>
+                                    <p class="text-xs text-slate-500">Regra: RCA 1 diferente de 53 e RCA 1 diferente de RCA 2.</p>
+                                </div>
+                                <div class="bg-slate-800 p-6 rounded-lg text-center">
+                                    <p class="text-slate-400 text-sm font-medium">Produto com Maior Cobertura</p>
+                                    <p id="innovations-top-coverage-product-kpi" class="text-2xl font-bold text-white my-1 truncate" title="Nenhum produto analisado">-</p>
+                                    <p id="innovations-top-coverage-value-kpi" class="text-2xl font-bold text-teal-400">0%</p>
+                                </div>
+                            </div>
+
+                            <!-- FILTROS -->
+                            <div class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md">
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                    <div>
+                                        <label for="innovations-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
+                                        <select id="innovations-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white">
+                                            <option value="">Todos</option>
+                                        </select>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="innovations-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label>
+                                        <button id="innovations-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="innovations-vendedor-filter-text">Todos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="innovations-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="innovations-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Fornecedor</label>
+                                        <button id="innovations-supplier-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="innovations-supplier-filter-text">Todos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="innovations-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="innovations-city-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label>
+                                        <input type="text" id="innovations-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white" autocomplete="off">
+                                        <div id="innovations-city-suggestions" class="absolute z-10 w-full bg-slate-700 border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                                    <div class="lg:col-span-3 relative">
+                                        <label for="innovations-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Produto (Obrigatório)</label>
+                                        <button id="innovations-product-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="innovations-product-filter-text">Selecione um ou mais produtos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="innovations-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg">
+                                            <div class="p-2 border-b border-slate-600"><input type="text" id="innovations-product-search-input" placeholder="Buscar produto..." class="bg-slate-800 text-xs rounded-lg block w-full p-2 border border-slate-600 text-white"></div>
+                                            <div id="innovations-product-list" class="max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                        </div>
+                                    </div>
+                                    <button id="clear-innovations-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+                                </div>
+                            </div>
+
+                            <!-- TABELA DE RESULTADOS -->
+                            <div id="innovations-table-container" class="bg-slate-800 p-4 rounded-lg">
+                                <div id="innovations-placeholder" class="text-center py-16">
+                                    <p class="text-slate-500 text-lg">Aguardando filtro de produtos...</p>
+                                </div>
+                                <div id="innovations-results" class="hidden overflow-auto custom-scrollbar" style="max-height: 60vh;">
+                                    <table class="min-w-full text-sm text-left">
+                                        <thead class="text-xs text-slate-300 uppercase sticky-header">
+                                            <tr>
+                                                <th class="px-4 py-3">Produto</th>
+                                                <th class="px-4 py-3 text-right">MÉD. TRI. (Emb.)</th>
+                                                <th class="px-4 py-3 text-right">VENDIDO MÊS (Emb.)</th>
+                                                <th class="px-4 py-3 text-right">ESTOQUE (Emb.)</th>
+                                                <th class="px-4 py-3 text-right">COBERTURA</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="innovations-table-body" class="divide-y divide-slate-700"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- FIM DA VIEW DE INOVAÇÕES -->
+
                         <div id="order-details-modal" class="modal-overlay hidden"><div class="bg-slate-800 rounded-lg shadow-2xl max-w-4xl w-full m-4"><div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Detalhes do Pedido <span id="modal-pedido-id"></span></h2><button id="modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button></div><div id="modal-header-info" class="p-6 text-left grid grid-cols-2 md:grid-cols-3 gap-4 text-sm"></div><div class="custom-scrollbar" style="max-height: 50vh; overflow-y: auto;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Produto</th><th class="px-4 py-3 text-right">Quantidade</th><th class="px-4 py-3 text-right">Peso (Kg)</th><th class="px-4 py-3 text-right">Valor Unitário</th></tr></thead><tbody id="modal-table-body" class="divide-y divide-slate-700"></tbody></table></div><div id="modal-footer-total" class="p-6 border-t border-slate-700 flex justify-between items-center"></div></div></div>
                         <div id="client-details-modal" class="modal-overlay hidden"><div class="bg-slate-800 rounded-lg shadow-2xl max-w-2xl w-full m-4"><div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Resumo Cadastral</h2><button id="client-modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button></div><div id="client-modal-content" class="p-6"></div></div></div>
                         <div id="holiday-modal" class="modal-overlay hidden">
