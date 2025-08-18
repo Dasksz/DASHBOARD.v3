@@ -2443,6 +2443,20 @@
             doc.text(`Data de Emissão: ${generationDate}`, 14, 50);
             const tableColumn = ["Código", "Cliente", "Bairro", "Cidade", "Últ. Compra"];
             if (includeFaturamento) tableColumn.splice(2, 0, "Faturamento");
+            
+            // NOVA LÓGICA DE ORDENAÇÃO
+            clientList.sort((a, b) => {
+                const cidadeA = a.cidade || '';
+                const cidadeB = b.cidade || '';
+                const bairroA = a.bairro || '';
+                const bairroB = b.bairro || '';
+                if (cidadeA < cidadeB) return -1;
+                if (cidadeA > cidadeB) return 1;
+                if (bairroA < bairroB) return -1;
+                if (bairroA > bairroB) return 1;
+                return 0;
+            });
+
             const tableRows = [];
             clientList.forEach(client => {
                 const clientData = [ client['Código'] || '', client.fantasia || client.razaoSocial || '', client.bairro || '', client.cidade || '', formatDate(client.ultimaCompra) || 'N/A' ];
@@ -2889,7 +2903,26 @@
                 updateSellerFilter(innovationsSupervisorFilter.value, innovationsVendedorFilterDropdown, innovationsVendedorFilterText, selectedInnovationsSellers, allSalesData);
                 handleInnovationsFilterChange();
             });
-            innovationsCityFilter.addEventListener('change', handleInnovationsFilterChange);
+
+            // CORREÇÃO: Adicionar gatilhos para o filtro de cidade da página de Inovações
+            innovationsCityFilter.addEventListener('input', () => {
+                const cityDataSource = getInnovationsFilteredData({ excludeFilter: 'city' }).clients;
+                updateCitySuggestions(innovationsCityFilter, innovationsCitySuggestions, cityDataSource);
+            });
+            innovationsCityFilter.addEventListener('focus', () => {
+                const cityDataSource = getInnovationsFilteredData({ excludeFilter: 'city' }).clients;
+                updateCitySuggestions(innovationsCityFilter, innovationsCitySuggestions, cityDataSource);
+            });
+             innovationsCityFilter.addEventListener('blur', () => setTimeout(() => innovationsCitySuggestions.classList.add('hidden'), 150));
+            innovationsCitySuggestions.addEventListener('click', (e) => {
+                if (e.target.tagName === 'DIV') {
+                    innovationsCityFilter.value = e.target.textContent;
+                    innovationsCitySuggestions.classList.add('hidden');
+                    handleInnovationsFilterChange();
+                }
+            });
+
+
             clearInnovationsFiltersBtn.addEventListener('click', resetInnovationsFilters);
 
             innovationsVendedorFilterBtn.addEventListener('click', () => innovationsVendedorFilterDropdown.classList.toggle('hidden'));
