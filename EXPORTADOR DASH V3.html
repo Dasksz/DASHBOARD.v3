@@ -7,15 +7,33 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .file-input-label { display: block; text-align: left; font-size: 0.875rem; font-weight: 500; color: #cbd5e1; margin-bottom: 0.5rem; }
-        .progress-bar-container { background-color: #1e293b; border-radius: 0.5rem; overflow: hidden; }
-        .progress-bar { background-color: #14b8a6; height: 100%; transition: width 0.3s ease-in-out; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #0d1126; /* Cor de fundo principal */
+        }
+        .file-input-label { 
+            display: block; 
+            text-align: left; 
+            font-size: 0.875rem; 
+            font-weight: 500; 
+            color: #94a3b8; /* cinza-azulado claro */
+            margin-bottom: 0.5rem; 
+        }
+        .progress-bar-container { 
+            background-color: #1e293b; 
+            border-radius: 0.5rem; 
+            overflow: hidden; 
+        }
+        .progress-bar { 
+            background-color: #2dd4bf; /* Verde esmeralda */
+            height: 100%; 
+            transition: width 0.3s ease-in-out; 
+        }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-200 flex items-center justify-center min-h-screen">
-    <div class="text-center p-8 bg-slate-800 rounded-lg shadow-2xl max-w-lg w-full m-4">
-        <h1 class="text-2xl font-bold text-white mb-4">Gerador de Relatório Otimizado</h1>
+<body class="text-slate-200 flex items-center justify-center min-h-screen">
+    <div class="text-center p-8 bg-[#1d2347] rounded-lg shadow-2xl max-w-lg w-full m-4 border border-slate-700">
+        <h1 class="text-2xl font-bold text-white mb-4">Painel de Vendas - Gerador</h1>
         <p class="text-slate-400 mb-6">Carregue os arquivos para gerar um dashboard offline. O processamento agora ocorre em segundo plano, sem travar a interface.</p>
         
         <div class="space-y-4 mb-6">
@@ -37,7 +55,7 @@
             </div>
              </div>
         
-        <button id="generate-btn" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg w-full disabled:bg-slate-600" disabled>
+        <button id="generate-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg w-full disabled:bg-slate-600" disabled>
             Gerar Relatório
         </button>
 
@@ -407,6 +425,83 @@
         const stockData08 = new Map(Object.entries(embeddedData.stockMap08 || {}));
         const clientMapForKPIs = new Map(allClientsData.map(c => [String(c['Código']), c]));
 
+        // =================================================================
+        // || ESTRUTURAS DE DADOS OTIMIZADAS PARA MELHORAR PERFORMANCE      ||
+        // =================================================================
+        // Para acelerar as filtragens, pré-calculamos alguns mapas/índices.
+        // Isso evita a necessidade de varrer os arrays completos a cada mudança de filtro.
+        const optimizedData = {};
+
+        function initializeOptimizedDataStructures() {
+            // Mapeia clientes por seus RCAs para busca rápida
+            optimizedData.clientsByRca = new Map();
+            allClientsData.forEach(client => {
+                if (client.rcas) {
+                    client.rcas.forEach(rca => {
+                        if (!optimizedData.clientsByRca.has(rca)) {
+                            optimizedData.clientsByRca.set(rca, []);
+                        }
+                        optimizedData.clientsByRca.get(rca).push(client);
+                    });
+                }
+            });
+
+            // Mapeia RCAs (vendedores) por seus supervisores
+            optimizedData.rcasBySupervisor = new Map();
+            const supervisorToRcaMap = new Map();
+            [...allSalesData, ...allHistoryData].forEach(sale => {
+                if (sale.CODUSUR && sale.SUPERV) {
+                    if (!supervisorToRcaMap.has(sale.SUPERV)) {
+                        supervisorToRcaMap.set(sale.SUPERV, new Set());
+                    }
+                    supervisorToRcaMap.get(sale.SUPERV).add(sale.CODUSUR);
+                }
+            });
+            supervisorToRcaMap.forEach((rcas, supervisor) => {
+                optimizedData.rcasBySupervisor.set(supervisor, Array.from(rcas));
+            });
+
+            // Mapeia produtos por fornecedor
+            optimizedData.productsBySupplier = new Map();
+            [...allSalesData, ...allHistoryData].forEach(sale => {
+                if (sale.CODFOR && sale.PRODUTO) {
+                    const codfor = String(sale.CODFOR);
+                    if (!optimizedData.productsBySupplier.has(codfor)) {
+                        optimizedData.productsBySupplier.set(codfor, new Set());
+                    }
+                    optimizedData.productsBySupplier.get(codfor).add(sale.PRODUTO);
+                }
+            });
+
+            // Mapeia vendas (atuais e históricas) por código de produto para acesso rápido
+            optimizedData.salesByProduct = { current: new Map(), history: new Map() };
+            allSalesData.forEach(sale => {
+                if (sale.PRODUTO) {
+                    if (!optimizedData.salesByProduct.current.has(sale.PRODUTO)) {
+                        optimizedData.salesByProduct.current.set(sale.PRODUTO, []);
+                    }
+                    optimizedData.salesByProduct.current.get(sale.PRODUTO).push(sale);
+                }
+            });
+            allHistoryData.forEach(sale => {
+                if (sale.PRODUTO) {
+                    if (!optimizedData.salesByProduct.history.has(sale.PRODUTO)) {
+                        optimizedData.salesByProduct.history.set(sale.PRODUTO, []);
+                    }
+                    optimizedData.salesByProduct.history.get(sale.PRODUTO).push(sale);
+                }
+            });
+
+            // Mapeia CODUSUR (RCA) pelo nome do vendedor
+            optimizedData.rcaCodeByName = new Map();
+             [...allSalesData, ...allHistoryData].forEach(s => {
+                if(s.NOME && s.CODUSUR) optimizedData.rcaCodeByName.set(s.NOME, s.CODUSUR);
+            });
+        }
+        // =================================================================
+        // || FIM DAS ESTRUTURAS OTIMIZADAS                                 ||
+        // =================================================================
+
         aggregatedOrders.sort((a, b) => {
             const dateA = parseDate(a.DTPED);
             const dateB = parseDate(b.DTPED);
@@ -432,6 +527,11 @@
 
         const totalVendasEl = document.getElementById('total-vendas');
         const totalPesoEl = document.getElementById('total-peso');
+        const kpiSkuPdVEl = document.getElementById('kpi-sku-pdv');
+        const kpiPositivacaoEl = document.getElementById('kpi-positivacao');
+        const kpiPositivacaoPercentEl = document.getElementById('kpi-positivacao-percent');
+
+
         const viewChartBtn = document.getElementById('viewChartBtn');
         const viewTableBtn = document.getElementById('viewTableBtn');
         const viewComparisonBtn = document.getElementById('viewComparisonBtn');
@@ -558,6 +658,8 @@
         const innovationsActiveClientsKpi = document.getElementById('innovations-active-clients-kpi');
         const innovationsTopCoverageProductKpi = document.getElementById('innovations-top-coverage-product-kpi');
         const innovationsTopCoverageValueKpi = document.getElementById('innovations-top-coverage-value-kpi');
+        const innovationsSelectionCoverageValueKpi = document.getElementById('innovations-selection-coverage-value-kpi');
+        const innovationsSelectionCoverageCountKpi = document.getElementById('innovations-selection-coverage-count-kpi');
 
         const modal = document.getElementById('order-details-modal');
         const modalCloseBtn = document.getElementById('modal-close-btn');
@@ -654,17 +756,25 @@
             return months.size > 0 ? months.size : 1;
         }
 
-        function calculateSummaryFromData(data, isFiltered) {
+        function calculateSummaryFromData(data, isFiltered, clientBaseForPositivacao) {
             const summary = { 
                 totalFaturamento: 0, totalPeso: 0, vendasPorVendedor: {}, vendasPorSupervisor: {}, 
-                top10ProdutosFaturamento: [], top10ProdutosPeso: [], faturamentoPorFornecedor: {} 
+                top10ProdutosFaturamento: [], top10ProdutosPeso: [], faturamentoPorFornecedor: {},
+                skuPdv: 0, positivacaoCount: 0, positivacaoPercent: 0
             };
             const salesByProduct = {};
             const faturamentoMap = new Map();
+            const clientsPositivados = new Set();
+            let totalSkus = 0;
 
             data.forEach(item => {
                 summary.totalFaturamento += item.VLVENDA;
                 summary.totalPeso += item.TOTPESOLIQ;
+
+                if(item.VLVENDA > 0) {
+                    clientsPositivados.add(item.CODCLI);
+                    totalSkus++;
+                }
 
                 const vendedor = item.NOME || 'N/A';
                 summary.vendasPorVendedor[vendedor] = (summary.vendasPorVendedor[vendedor] || 0) + item.VLVENDA;
@@ -690,6 +800,11 @@
                 const currentTotal = faturamentoMap.get(fornecedorLabel) || 0;
                 faturamentoMap.set(fornecedorLabel, currentTotal + item.VLVENDA);
             });
+
+            const totalRelevantClients = clientBaseForPositivacao.length;
+            summary.positivacaoCount = clientsPositivados.size;
+            summary.positivacaoPercent = totalRelevantClients > 0 ? (summary.positivacaoCount / totalRelevantClients) * 100 : 0;
+            summary.skuPdv = summary.positivacaoCount > 0 ? totalSkus / summary.positivacaoCount : 0;
 
             summary.faturamentoPorFornecedor = Object.fromEntries(faturamentoMap);
             summary.top10ProdutosFaturamento = Object.entries(salesByProduct).sort(([,a],[,b]) => b.faturamento - a.faturamento).slice(0, 10).map(([p, d]) => ({ produto: p, ...d }));
@@ -852,7 +967,16 @@
             const posicao = posicaoFilter.value;
             const codcli = codcliFilter.value.trim();
             
-            let clientsForAnalysis = [...allClientsData];
+            // CORREÇÃO: Usar a base de clientes ativos da regra de inovações como ponto de partida
+            const innovationsActiveClients = allClientsData.filter(c => {
+                const rca1 = String(c.rca1 || '').trim();
+                const rca2 = String(c.rca2 || '').trim();
+                const isAmericanas = c.razaoSocial.toUpperCase().includes('AMERICANAS');
+                return rca1 && rca1 !== '53' && rca1 !== rca2 && !isAmericanas;
+            });
+
+            let clientsForAnalysis = [...innovationsActiveClients];
+            
             if (mainRedeGroupFilter === 'com_rede') {
                 clientsForAnalysis = clientsForAnalysis.filter(c => c.ramo && c.ramo !== 'N/A');
                 if (selectedMainRedes.length > 0) {
@@ -901,10 +1025,16 @@
             });
             
             const isFiltered = !!supervisor || selectedSellers.length > 0 || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter;
-            const summary = calculateSummaryFromData(filteredSalesData, isFiltered);
-            totalVendasEl.textContent = summary.totalFaturamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            totalPesoEl.textContent = `${(summary.totalPeso / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} Ton`;
+            const summary = calculateSummaryFromData(filteredSalesData, isFiltered, clientsForAnalysis);
             
+            // Update main KPIs
+            totalVendasEl.textContent = summary.totalFaturamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            totalPesoEl.textContent = `${(summary.totalPeso / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
+            kpiSkuPdVEl.textContent = summary.skuPdv.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+            kpiPositivacaoEl.textContent = `${summary.positivacaoPercent.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+            kpiPositivacaoPercentEl.textContent = `${summary.positivacaoCount.toLocaleString('pt-BR')} PDVs`;
+
+
             if (!tableView.classList.contains('hidden')) renderTable(filteredTableData);
             
             if (!chartView.classList.contains('hidden')) {
@@ -2215,14 +2345,15 @@
         }
 
         // =================================================================
-        // || INÍCIO DAS FUNÇÕES DA PÁGINA DE INOVAÇÕES                 ||
+        // || INÍCIO DAS FUNÇÕES DA PÁGINA DE INOVAÇÕES (OTIMIZADO)       ||
         // =================================================================
         
         function calculateAndSetGlobalInnovationsKPI() {
             const activeClients = allClientsData.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
                 const rca2 = String(c.rca2 || '').trim();
-                return rca1 && rca1 !== '53' && rca1 !== rca2;
+                const isAmericanas = c.razaoSocial.toUpperCase().includes('AMERICANAS');
+                return rca1 && rca1 !== '53' && rca1 !== rca2 && !isAmericanas;
             });
             const activeClientsCount = activeClients.length;
             const activeClientCodes = new Set(activeClients.map(c => c['Código']));
@@ -2247,43 +2378,56 @@
             globalInnovationsKPI = { activeClients: activeClientsCount, topProduct: topCoverage };
         }
 
-        function getInnovationsFilteredData(options = {}) {
-            const { excludeFilter = null } = options;
-
+        function getInnovationsFilteredData() {
             const supervisor = innovationsSupervisorFilter.value;
             const sellers = selectedInnovationsSellers;
-            const suppliers = selectedInnovationsSuppliers;
-            const products = selectedInnovationsProducts;
-            const city = innovationsCityFilter.value.trim();
+            const city = innovationsCityFilter.value.trim().toLowerCase();
 
-            const salesFilterFunction = s =>
-                (excludeFilter === 'supervisor' || !supervisor || s.SUPERV === supervisor) &&
-                (excludeFilter === 'seller' || sellers.length === 0 || sellers.includes(s.NOME)) &&
-                (excludeFilter === 'supplier' || suppliers.length === 0 || suppliers.includes(String(s.CODFOR))) &&
-                (excludeFilter === 'product' || products.length === 0 || products.includes(String(s.PRODUTO))) &&
-                (excludeFilter === 'city' || !city || (s.CIDADE && s.CIDADE.toLowerCase() === city.toLowerCase()));
+            // 1. Determinar o conjunto de clientes relevantes com base nos filtros
+            let relevantClientCodes = new Set(allClientsData.map(c => c['Código']));
+
+            if (supervisor) {
+                const rcasOfSupervisor = optimizedData.rcasBySupervisor.get(supervisor) || [];
+                const clientsOfSupervisor = new Set();
+                rcasOfSupervisor.forEach(rca => {
+                    (optimizedData.clientsByRca.get(rca) || []).forEach(client => clientsOfSupervisor.add(client['Código']));
+                });
+                relevantClientCodes = clientsOfSupervisor;
+            }
+
+            if (sellers.length > 0) {
+                const rcasOfSellers = new Set(sellers.map(name => optimizedData.rcaCodeByName.get(name)).filter(Boolean));
+                const clientsOfSellers = new Set();
+                 rcasOfSellers.forEach(rca => {
+                    (optimizedData.clientsByRca.get(rca) || []).forEach(client => clientsOfSellers.add(client['Código']));
+                });
+                
+                // Interseção com os clientes já filtrados
+                relevantClientCodes = new Set([...relevantClientCodes].filter(code => clientsOfSellers.has(code)));
+            }
             
-            const clientFilterFunction = c => {
-                const clientRcas = c.rcas || [];
-                const rcasOfSupervisor = supervisor ? [...new Set(allSalesData.filter(s => s.SUPERV === supervisor).map(s => s.CODUSUR))] : [];
-                const rcasOfVendedor = sellers.length > 0 ? [...new Set(allSalesData.filter(s => sellers.includes(s.NOME)).map(s => s.CODUSUR))] : [];
+            if (city) {
+                const clientsInCity = new Set();
+                allClientsData.forEach(c => {
+                    if (c.cidade && c.cidade.toLowerCase() === city) {
+                        clientsInCity.add(c['Código']);
+                    }
+                });
+                relevantClientCodes = new Set([...relevantClientCodes].filter(code => clientsInCity.has(code)));
+            }
 
-                const supervisorMatch = !supervisor || clientRcas.some(rca => rcasOfSupervisor.includes(rca));
-                const vendedorMatch = sellers.length === 0 || clientRcas.some(rca => rcasOfVendedor.includes(rca));
-                const cityMatch = !city || (c.cidade && c.cidade.toLowerCase() === city.toLowerCase());
+            // 2. Filtrar as vendas com base nos clientes relevantes
+            const filterSalesByClients = (salesData) => salesData.filter(s => relevantClientCodes.has(s.CODCLI));
+            
+            const currentSales = filterSalesByClients(allSalesData);
+            const historySales = filterSalesByClients(allHistoryData);
+            const clients = allClientsData.filter(c => relevantClientCodes.has(c['Código']));
 
-                return supervisorMatch && vendedorMatch && cityMatch;
-            };
-
-            return {
-                currentSales: allSalesData.filter(salesFilterFunction),
-                historySales: allHistoryData.filter(salesFilterFunction),
-                clients: allClientsData.filter(clientFilterFunction),
-            };
+            return { currentSales, historySales, clients };
         }
 
         function updateInnovationsFilters() {
-            const filteredData = getInnovationsFilteredData({ excludeFilter: 'product' });
+            const filteredData = getInnovationsFilteredData();
             let productSource = filteredData.historySales;
 
             if (selectedInnovationsSuppliers.length > 0) {
@@ -2307,79 +2451,92 @@
         }
         
         function updateInnovationsView() {
-            // Atualiza os KPIs fixos que foram pré-calculados
             innovationsActiveClientsKpi.textContent = globalInnovationsKPI.activeClients.toLocaleString('pt-BR');
             innovationsTopCoverageProductKpi.textContent = globalInnovationsKPI.topProduct.product;
             innovationsTopCoverageProductKpi.title = globalInnovationsKPI.topProduct.product;
             innovationsTopCoverageValueKpi.textContent = `${globalInnovationsKPI.topProduct.coverage.toFixed(2)}%`;
-            
-            const filteredData = getInnovationsFilteredData();
-            const { clients, currentSales, historySales } = filteredData;
-            
-            const activeClientsForCoverage = clients.filter(c => {
-                const rca1 = String(c.rca1 || '').trim();
-                const rca2 = String(c.rca2 || '').trim();
-                return rca1 && rca1 !== '53' && rca1 !== rca2;
-            });
-            const activeClientsCount = activeClientsForCoverage.length;
-            const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['Código']));
             
             const productsToAnalyze = selectedInnovationsProducts;
 
             if (productsToAnalyze.length === 0) {
                 innovationsPlaceholder.classList.remove('hidden');
                 innovationsResults.classList.add('hidden');
-            } else {
-                innovationsPlaceholder.classList.add('hidden');
-                innovationsResults.classList.remove('hidden');
+                innovationsSelectionCoverageValueKpi.textContent = '0%';
+                innovationsSelectionCoverageCountKpi.textContent = `0 de ${globalInnovationsKPI.activeClients} clientes`;
+                return;
+            } 
+            
+            innovationsPlaceholder.classList.add('hidden');
+            innovationsResults.classList.remove('hidden');
 
-                const tableData = [];
-                const historyMonthsCount = getUniqueMonthCount(historySales);
-                const activeStockMap = getActiveStockMap('ambas'); 
+            const filteredData = getInnovationsFilteredData();
+            const { clients, currentSales, historySales } = filteredData;
+            
+            const activeClientsForCoverage = clients.filter(c => {
+                const rca1 = String(c.rca1 || '').trim();
+                const rca2 = String(c.rca2 || '').trim();
+                const isAmericanas = c.razaoSocial.toUpperCase().includes('AMERICANAS');
+                return rca1 && rca1 !== '53' && rca1 !== rca2 && !isAmericanas;
+            });
+            const activeClientsCount = activeClientsForCoverage.length;
+            const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['Código']));
 
-                productsToAnalyze.forEach(productCode => {
-                    const productInfo = allSalesData.find(s => s.PRODUTO === productCode) || { DESCRICAO: `Produto ${productCode}`};
+            const tableData = [];
+            const historyMonthsCount = getUniqueMonthCount(historySales);
+            const activeStockMap = getActiveStockMap('ambas'); 
+            const clientsWhoBoughtSelection = new Set();
 
-                    const totalHistoryQty = historySales
-                        .filter(s => s.PRODUTO === productCode)
-                        .reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
-                    const avgMonthlySale = historyMonthsCount > 0 ? totalHistoryQty / historyMonthsCount : 0;
+            productsToAnalyze.forEach(productCode => {
+                const productInfo = allSalesData.find(s => s.PRODUTO === productCode) || { DESCRICAO: `Produto ${productCode}`};
 
-                    const currentMonthSaleQty = currentSales
-                        .filter(s => s.PRODUTO === productCode)
-                        .reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
-                    
-                    const stockQty = activeStockMap.get(productCode) || 0;
+                const productHistorySales = historySales.filter(s => s.PRODUTO === productCode);
+                const totalHistoryQty = productHistorySales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                const avgMonthlySale = historyMonthsCount > 0 ? totalHistoryQty / historyMonthsCount : 0;
 
-                    const clientsWhoBoughtProduct = new Set(
-                        currentSales.filter(s => s.PRODUTO === productCode && s.VLVENDA > 0).map(s => s.CODCLI)
-                    );
-                    
-                    const coveredClientsCount = [...clientsWhoBoughtProduct].filter(code => activeClientCodes.has(code)).length;
-                    const coverage = activeClientsCount > 0 ? (coveredClientsCount / activeClientsCount) * 100 : 0;
+                const productCurrentSales = currentSales.filter(s => s.PRODUTO === productCode);
+                const currentMonthSaleQty = productCurrentSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                
+                const stockQty = activeStockMap.get(productCode) || 0;
 
-                    tableData.push({
-                        descricao: `(${productCode}) ${productInfo.DESCRICAO}`,
-                        avgMonthlySale: avgMonthlySale,
-                        currentMonthSaleQty: currentMonthSaleQty,
-                        stockQty: stockQty,
-                        coverage: coverage,
-                    });
+                const clientsWhoBoughtProduct = new Set(productCurrentSales.filter(s => s.VLVENDA > 0).map(s => s.CODCLI));
+                
+                const coveredClientsCount = [...clientsWhoBoughtProduct].filter(code => activeClientCodes.has(code)).length;
+                const coverage = activeClientsCount > 0 ? (coveredClientsCount / activeClientsCount) * 100 : 0;
+
+                // Adiciona clientes à contagem única para o KPI de seleção
+                clientsWhoBoughtProduct.forEach(clientCode => {
+                    if (activeClientCodes.has(clientCode)) {
+                        clientsWhoBoughtSelection.add(clientCode);
+                    }
                 });
 
-                // Ordenar a tabela por cobertura (decrescente)
-                tableData.sort((a, b) => b.coverage - a.coverage);
+                tableData.push({
+                    descricao: `(${productCode}) ${productInfo.DESCRICAO}`,
+                    avgMonthlySale: avgMonthlySale,
+                    currentMonthSaleQty: currentMonthSaleQty,
+                    stockQty: stockQty,
+                    coverage: coverage,
+                });
+            });
 
-                innovationsTableBody.innerHTML = tableData.map(item => `
-                    <tr class="hover:bg-slate-700/50">
-                        <td class="px-4 py-2 text-xs">${item.descricao}</td>
-                        <td class="px-4 py-2 text-right text-xs">${item.avgMonthlySale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                        <td class="px-4 py-2 text-right text-xs">${item.currentMonthSaleQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                        <td class="px-4 py-2 text-right text-xs">${item.stockQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                        <td class="px-4 py-2 text-right text-xs font-bold text-teal-300">${item.coverage.toFixed(2)}%</td>
-                    </tr>
-                `).join('');
-            }
+            // Atualiza o novo KPI de cobertura da seleção
+            const selectionCoveredCount = clientsWhoBoughtSelection.size;
+            const selectionCoveragePercent = activeClientsCount > 0 ? (selectionCoveredCount / activeClientsCount) * 100 : 0;
+            innovationsSelectionCoverageValueKpi.textContent = `${selectionCoveragePercent.toFixed(2)}%`;
+            innovationsSelectionCoverageCountKpi.textContent = `${selectionCoveredCount} de ${activeClientsCount} clientes`;
+
+
+            tableData.sort((a, b) => b.coverage - a.coverage);
+
+            innovationsTableBody.innerHTML = tableData.map(item => `
+                <tr class="hover:bg-slate-700/50">
+                    <td class="px-4 py-2 text-xs">${item.descricao}</td>
+                    <td class="px-4 py-2 text-right text-xs">${item.avgMonthlySale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                    <td class="px-4 py-2 text-right text-xs">${item.currentMonthSaleQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                    <td class="px-4 py-2 text-right text-xs">${item.stockQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                    <td class="px-4 py-2 text-right text-xs font-bold text-teal-300">${item.coverage.toFixed(2)}%</td>
+                </tr>
+            `).join('');
         }
 
         // =================================================================
@@ -2400,7 +2557,7 @@
                 const variation = kpi.history > 0 ? ((kpi.current - kpi.history) / kpi.history) * 100 : (kpi.current > 0 ? 100 : 0);
                 const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400';
                 
-                return `<div class="bg-slate-800 p-4 rounded-lg text-center">
+                return `<div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
                             <p class="text-slate-400 text-sm">${kpi.title}</p>
                             <p class="text-2xl font-bold text-white my-2">${formatValue(kpi.current, kpi.format)}</p>
                             <p class="text-sm ${colorClass}">${variation.toFixed(2)}% vs Média do Trimestre</p>
@@ -2444,7 +2601,6 @@
             const tableColumn = ["Código", "Cliente", "Bairro", "Cidade", "Últ. Compra"];
             if (includeFaturamento) tableColumn.splice(2, 0, "Faturamento");
             
-            // NOVA LÓGICA DE ORDENAÇÃO
             clientList.sort((a, b) => {
                 const cidadeA = a.cidade || '';
                 const cidadeB = b.cidade || '';
@@ -2521,7 +2677,7 @@
             if (stockRedeFilterWrapper) stockRedeFilterWrapper.style.display = hasRedeData ? '' : 'none';
         }
 
-        function debounce(func, delay = 250) {
+        function debounce(func, delay = 300) {
             let timeout;
             return function(...args) {
                 clearTimeout(timeout);
@@ -2876,6 +3032,11 @@
             pesoBtn.addEventListener('click', () => { currentProductMetric = 'peso'; pesoBtn.classList.add('active'); faturamentoBtn.classList.remove('active'); updateAllVisuals(); });
 
             // --- Event Listeners da Página de Inovações ---
+            const debouncedUpdateInnovations = debounce(() => {
+                updateInnovationsFilters();
+                updateInnovationsView();
+            }, 400);
+
             viewInnovationsBtn.addEventListener('click', () => {
                 mainDashboard.classList.add('hidden');
                 innovationsView.classList.remove('hidden');
@@ -2893,24 +3054,20 @@
                 updateAllVisuals();
             });
 
-            const handleInnovationsFilterChange = () => {
-                updateInnovationsFilters();
-                updateInnovationsView();
-            };
-
             innovationsSupervisorFilter.addEventListener('change', () => {
                 selectedInnovationsSellers = [];
                 updateSellerFilter(innovationsSupervisorFilter.value, innovationsVendedorFilterDropdown, innovationsVendedorFilterText, selectedInnovationsSellers, allSalesData);
-                handleInnovationsFilterChange();
+                debouncedUpdateInnovations();
             });
 
-            // CORREÇÃO: Adicionar gatilhos para o filtro de cidade da página de Inovações
             innovationsCityFilter.addEventListener('input', () => {
-                const cityDataSource = getInnovationsFilteredData({ excludeFilter: 'city' }).clients;
+                const cityDataSource = getInnovationsFilteredData().clients;
                 updateCitySuggestions(innovationsCityFilter, innovationsCitySuggestions, cityDataSource);
+                debouncedUpdateInnovations();
             });
             innovationsCityFilter.addEventListener('focus', () => {
-                const cityDataSource = getInnovationsFilteredData({ excludeFilter: 'city' }).clients;
+                const cityDataSource = getInnovationsFilteredData().clients;
+                innovationsCitySuggestions.classList.remove('manual-hide');
                 updateCitySuggestions(innovationsCityFilter, innovationsCitySuggestions, cityDataSource);
             });
              innovationsCityFilter.addEventListener('blur', () => setTimeout(() => innovationsCitySuggestions.classList.add('hidden'), 150));
@@ -2918,7 +3075,7 @@
                 if (e.target.tagName === 'DIV') {
                     innovationsCityFilter.value = e.target.textContent;
                     innovationsCitySuggestions.classList.add('hidden');
-                    handleInnovationsFilterChange();
+                    debouncedUpdateInnovations();
                 }
             });
 
@@ -2935,7 +3092,7 @@
                         selectedInnovationsSellers = selectedInnovationsSellers.filter(s => s !== value);
                     }
                     updateSellerFilter(innovationsSupervisorFilter.value, innovationsVendedorFilterDropdown, innovationsVendedorFilterText, selectedInnovationsSellers, allSalesData);
-                    handleInnovationsFilterChange();
+                    debouncedUpdateInnovations();
                 }
             });
 
@@ -2950,13 +3107,13 @@
                     }
                     updateSupplierFilter(innovationsSupplierFilterDropdown, innovationsSupplierFilterText, selectedInnovationsSuppliers, allSalesData, 'innovations');
                     
-                    // NOVA LÓGICA: Atualiza a seleção de produtos com base no fornecedor
-                    const supplierProducts = allSalesData
-                        .filter(s => selectedInnovationsSuppliers.includes(String(s.CODFOR)))
-                        .map(s => s.PRODUTO);
-                    selectedInnovationsProducts = [...new Set(supplierProducts)];
+                    const supplierProducts = new Set();
+                    selectedInnovationsSuppliers.forEach(codfor => {
+                        (optimizedData.productsBySupplier.get(codfor) || []).forEach(prod => supplierProducts.add(prod));
+                    });
+                    selectedInnovationsProducts = Array.from(supplierProducts);
 
-                    handleInnovationsFilterChange();
+                    debouncedUpdateInnovations();
                 }
             });
 
@@ -2975,7 +3132,7 @@
 
             innovationsProductFilterDropdown.addEventListener('change', (e) => {
                 if (e.target.dataset.filterType === 'innovations' && handleProductFilterChange(e, selectedInnovationsProducts)) {
-                    handleInnovationsFilterChange();
+                    debouncedUpdateInnovations();
                 }
             });
 
@@ -2986,6 +3143,7 @@
             });
         }
         
+        initializeOptimizedDataStructures(); // Pré-processa os dados para performance
         calculateHistoricalBests();
         populateSupervisors('supervisor-filter', allSalesData);
         populateSupervisors('city-supervisor-filter', allSalesData);
@@ -3093,7 +3251,7 @@
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>PRIME DISTRIBUIÇÃO</title>
+                        <title>Painel de Vendas 3PD</title>
                         <link rel="icon" type="image/jpeg" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSnaaZ2WnZBJIxPRfabS4Ug78PKK6Gu3nbHlw&s">
                         <script src="https://cdn.tailwindcss.com"><\/script>
                         <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
@@ -3101,20 +3259,61 @@
                         <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>
                         <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"><\/script>
                         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-                        <style> body { font-family: 'Inter', sans-serif; } ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #0f172a; } ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; } ::-webkit-scrollbar-corner { background: #0f172a; } .sticky-header th { position: sticky; top: 0; z-index: 10; background-color: #1e293b; } .hidden { display: none; } .metric-btn.active, .fornecedor-btn.active, .comparison-toggle-btn.active, .group-btn.active, #main-rede-group-container > div > button.active, #city-rede-group-container > div > button.active, #comparison-rede-group-container > div > button.active, #stock-rede-group-container > div > button.active { background-color: #0d9488; color: #FFF; } .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; } .tooltip { position: relative; display: inline-block; cursor: pointer; } .tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #1e293b; color: #fff; border-radius: 6px; padding: 8px; position: absolute; z-index: 1001; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; pointer-events: none; } .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; } .custom-scrollbar::-webkit-scrollbar { width: 8px; } .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; } .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 10px; } </style>
+                        <style> 
+                            body { font-family: 'Inter', sans-serif; background-color: #0d1126; } 
+                            ::-webkit-scrollbar { width: 8px; } 
+                            ::-webkit-scrollbar-track { background: #0f172a; } 
+                            ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; } 
+                            ::-webkit-scrollbar-corner { background: #0f172a; } 
+                            .sticky-header th { position: sticky; top: 0; z-index: 10; background-color: #1d2347; } 
+                            .hidden { display: none; } 
+                            .metric-btn.active, .fornecedor-btn.active, .comparison-toggle-btn.active, .group-btn.active, #main-rede-group-container > div > button.active, #city-rede-group-container > div > button.active, #comparison-rede-group-container > div > button.active, #stock-rede-group-container > div > button.active { background-color: #0d9488; color: #FFF; } 
+                            .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; } 
+                            .tooltip { position: relative; display: inline-block; cursor: pointer; } 
+                            .tooltip .tooltip-text { visibility: hidden; width: 220px; background-color: #1e293b; color: #fff; border-radius: 6px; padding: 8px; position: absolute; z-index: 1001; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; pointer-events: none; } 
+                            .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; } 
+                            .custom-scrollbar::-webkit-scrollbar { width: 8px; } 
+                            .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; } 
+                            .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 10px; } 
+                            .kpi-card { background-color: #1d2347; border-radius: 0.5rem; padding: 1.5rem; text-align: center; border: 1px solid #334155; }
+                        </style>
                     </head>
                     <body class="bg-slate-900 text-slate-200 antialiased">
                         <div id="main-dashboard">
                             <div class="container mx-auto p-4 sm:p-6 lg:p-8">
                                 <header class="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-                                    <div class="text-center sm:text-left"><h1 class="text-2xl font-bold text-white"><span style="color: #FFC000;">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-slate-400 mt-1">Dados atualizados em: ${generationDate}</p></div>
-                                    <div class="flex gap-4 sm:gap-6 items-center"><div class="text-right"><p class="text-slate-400 text-sm">Peso Total</p><p id="total-peso" class="text-xl sm:text-2xl font-bold text-emerald-400">0,000 Ton</p></div><div class="text-right"><p class="text-slate-400 text-sm">Faturamento Total</p><p id="total-vendas" class="text-xl sm:text-2xl font-bold text-emerald-400">R$ 0,00</p></div></div>
+                                    <div class="text-center sm:text-left">
+                                        <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS 3PD</h1>
+                                        <p class="text-slate-400 mt-1">Dados atualizados em: ${generationDate}</p>
+                                    </div>
                                 </header>
+                                
+                                <!-- KPIs -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                                    <div class="kpi-card bg-purple-800/50 border-purple-700">
+                                        <h3 class="text-slate-300 font-medium">Volume Tons</h3>
+                                        <p id="total-peso" class="text-4xl font-bold text-white my-2">0,0</p>
+                                    </div>
+                                    <div class="kpi-card bg-rose-800/50 border-rose-700">
+                                        <h3 class="text-slate-300 font-medium">Faturamento R$</h3>
+                                        <p id="total-vendas" class="text-4xl font-bold text-white my-2">R$ 0,00</p>
+                                    </div>
+                                    <div class="kpi-card bg-blue-800/50 border-blue-700">
+                                        <h3 class="text-slate-300 font-medium">SKU/PDV</h3>
+                                        <p id="kpi-sku-pdv" class="text-4xl font-bold text-white my-2">0,0</p>
+                                    </div>
+                                    <div class="kpi-card bg-emerald-800/50 border-emerald-700">
+                                        <h3 class="text-slate-300 font-medium">Cobertura PDVs</h3>
+                                        <p id="kpi-positivacao" class="text-4xl font-bold text-white my-2">0,0%</p>
+                                        <p id="kpi-positivacao-percent" class="text-sm text-slate-400 -mt-1">0 PDVs</p>
+                                    </div>
+                                </div>
+
                                 <div class="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
                                     <div id="fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2"><button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button><button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button></div>
-                                    <div class="flex gap-2 w-full sm:w-auto"><button id="viewChartBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Ver Gráficos</button><button id="viewTableBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hidden">Ver Tabela</button><button id="viewComparisonBtn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg">Ver Comparativo</button><button id="viewStockBtn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Estoque</button></div>
+                                    <div class="flex gap-2 w-full sm:w-auto"><button id="viewChartBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hidden">Ver Gráficos</button><button id="viewTableBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Ver Tabela</button><button id="viewComparisonBtn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg">Ver Comparativo</button><button id="viewStockBtn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Estoque</button></div>
                                 </div>
-                                <div id="main-filters" class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md">
+                                <div id="main-filters" class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
                                     <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                                         <div id="main-rede-filter-wrapper" class="relative">
                                             <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
@@ -3137,7 +3336,7 @@
                                 </div>
                                 <main id="app-container">
                                     <div id="chartView" class="">
-                                        <div class="mb-6 bg-slate-800 p-4 rounded-lg">
+                                        <div class="mb-6 bg-[#1d2347] p-4 rounded-lg border border-slate-700">
                                             <div class="flex justify-between items-center mb-4">
                                                 <div class="w-1/3">
                                                     <label for="main-holiday-picker-btn" class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label>
@@ -3150,23 +3349,23 @@
                                             </div>
                                             <div id="trendChartContainer" class="relative h-80"></div>
                                         </div>
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-slate-800 p-4 rounded-lg"><h2 id="sales-by-person-title" class="text-lg font-semibold text-white mb-4 text-center">Vendas por Supervisor</h2><div id="salesByPersonChartContainer" class="relative h-80"></div></div><div class="bg-slate-800 p-4 rounded-lg"><h2 id="faturamentoPorFornecedorTitle" class="text-lg font-semibold text-white mb-4 text-center">Faturamento por Categoria</h2><div id="faturamentoPorFornecedorChartContainer" class="relative h-80"></div></div></div>
-                                        <div class="mt-6 bg-slate-800 p-4 rounded-lg"><div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white">Vendas por Produto</h2><div class="bg-slate-700 rounded-lg p-1 flex"><button id="faturamentoBtn" class="metric-btn active px-3 py-1 text-sm rounded-md">Faturamento</button><button id="pesoBtn" class="metric-btn px-3 py-1 text-sm rounded-md">Peso Kg</button></div></div><div id="salesByProductBarChartContainer" class="relative h-80"></div></div>
+                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 id="sales-by-person-title" class="text-lg font-semibold text-white mb-4 text-center">Vendas por Supervisor</h2><div id="salesByPersonChartContainer" class="relative h-80"></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 id="faturamentoPorFornecedorTitle" class="text-lg font-semibold text-white mb-4 text-center">Faturamento por Categoria</h2><div id="faturamentoPorFornecedorChartContainer" class="relative h-80"></div></div></div>
+                                        <div class="mt-6 bg-[#1d2347] p-4 rounded-lg border border-slate-700"><div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white">Vendas por Produto</h2><div class="bg-slate-700 rounded-lg p-1 flex"><button id="faturamentoBtn" class="metric-btn active px-3 py-1 text-sm rounded-md">Faturamento</button><button id="pesoBtn" class="metric-btn px-3 py-1 text-sm rounded-md">Peso Kg</button></div></div><div id="salesByProductBarChartContainer" class="relative h-80"></div></div>
                                         <div class="mt-6 space-y-3">
                                             <button id="show-weekly-btn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg">Gráficos Semanais</button>
                                             <button id="show-city-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg">Gráficos por Cidade</button>
                                             <button id="viewInnovationsBtn" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-lg">Inovações</button>
                                         </div>
                                     </div>
-                                    <div id="tableView" class="hidden"><div class="overflow-x-auto bg-slate-800 rounded-lg" style="max-height: 60vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Nº Pedido</th><th class="px-4 py-3">Cód. Cliente</th><th class="px-4 py-3">Vendedor</th><th class="px-4 py-3">Fornecedor</th><th class="px-4 py-3">Data Pedido</th><th class="px-4 py-3">Data Fat.</th><th class="px-4 py-3 text-right">Peso Total</th><th class="px-4 py-3 text-right">Faturamento Total</th><th class="px-4 py-3 text-center">Posição</th></tr></thead><tbody id="report-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
+                                    <div id="tableView" class="hidden"><div class="overflow-x-auto bg-[#1d2347] rounded-lg border border-slate-700" style="max-height: 60vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Nº Pedido</th><th class="px-4 py-3">Cód. Cliente</th><th class="px-4 py-3">Vendedor</th><th class="px-4 py-3">Fornecedor</th><th class="px-4 py-3">Data Pedido</th><th class="px-4 py-3">Data Fat.</th><th class="px-4 py-3 text-right">Peso Total</th><th class="px-4 py-3 text-right">Faturamento Total</th><th class="px-4 py-3 text-center">Posição</th></tr></thead><tbody id="report-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
                                 </main>
                             </div>
                         </div>
                         <div id="city-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
                             <div id="city-view-loader" class="text-center p-16"><p class="text-lg text-slate-400">Carregando dados...</p></div>
                             <div id="city-view-content" class="hidden">
-                                <div class="flex justify-between items-center mb-6"><div><h1 class="text-2xl font-bold text-white"><span style="color: #FFC000;">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Vendas por Cidade</p></div><button id="back-to-main-from-city-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
-                                <div class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md">
+                                <div class="flex justify-between items-center mb-6"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS 3PD</h1><p class="text-lg text-slate-300 -mt-1">Análise de Vendas por Cidade</p></div><button id="back-to-main-from-city-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+                                <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
                                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                                         <div id="city-rede-filter-wrapper" class="relative">
                                             <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
@@ -3191,19 +3390,19 @@
                                         <button id="clear-city-filters-btn" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button>
                                     </div>
                                 </div>
-                                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6"><div class="bg-slate-800 p-4 rounded-lg"><div class="flex justify-between items-center mb-4"><div class="w-1/4"><span class="text-xl font-bold text-cyan-400">Top 10</span></div><div class="w-1/2 text-center"><h2 id="city-chart-title" class="text-lg font-semibold text-white"></h2></div><div class="w-1/4 text-right"><p class="text-slate-400 text-sm">Total Vendido</p><p id="total-faturamento-cidade" class="text-xl font-bold text-emerald-400">R$ 0,00</p></div></div><div id="salesByClientInCityChartContainer" class="relative h-96"></div></div><div class="bg-slate-800 p-4 rounded-lg"><h2 class="text-lg font-semibold text-white mb-4 text-center">Status dos Clientes</h2><div id="customerStatusChartContainer" class="relative h-96 flex items-center justify-center"></div></div></div>
-                                <div class="bg-slate-800 p-4 rounded-lg mt-6"><div class="flex justify-between items-center mb-4 px-4"><h3 class="text-lg font-semibold text-white">Clientes Ativos no Mês</h3><button id="export-active-pdf-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Exportar Relatório</button></div><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Nome Fantasia</th><th class="px-4 py-3 text-right">Faturamento</th><th class="px-4 py-3">Cidade</th><th class="px-4 py-3">Bairro</th><th class="px-4 py-3">RCA 1</th><th class="px-4 py-3">RCA 2</th></tr></thead><tbody id="city-active-detail-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
-                                <div class="bg-slate-800 p-4 rounded-lg mt-6"><div class="flex justify-between items-center mb-4 px-4"><h3 class="text-lg font-semibold text-white">Clientes S/ Vendas no Mês</h3><button id="export-inactive-pdf-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Exportar Relatório</button></div><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Nome Fantasia</th><th class="px-4 py-3">Cidade</th><th class="px-4 py-3">Bairro</th><th class="px-4 py-3 text-center">Última Compra</th><th class="px-4 py-3">RCA 1</th><th class="px-4 py-3">RCA 2</th></tr></thead><tbody id="city-inactive-detail-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
+                                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><div class="flex justify-between items-center mb-4"><div class="w-1/4"><span class="text-xl font-bold text-cyan-400">Top 10</span></div><div class="w-1/2 text-center"><h2 id="city-chart-title" class="text-lg font-semibold text-white"></h2></div><div class="w-1/4 text-right"><p class="text-slate-400 text-sm">Total Vendido</p><p id="total-faturamento-cidade" class="text-xl font-bold text-emerald-400">R$ 0,00</p></div></div><div id="salesByClientInCityChartContainer" class="relative h-96"></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white mb-4 text-center">Status dos Clientes</h2><div id="customerStatusChartContainer" class="relative h-96 flex items-center justify-center"></div></div></div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg mt-6 border border-slate-700"><div class="flex justify-between items-center mb-4 px-4"><h3 class="text-lg font-semibold text-white">Clientes Ativos no Mês</h3><button id="export-active-pdf-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Exportar Relatório</button></div><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Nome Fantasia</th><th class="px-4 py-3 text-right">Faturamento</th><th class="px-4 py-3">Cidade</th><th class="px-4 py-3">Bairro</th><th class="px-4 py-3">RCA 1</th><th class="px-4 py-3">RCA 2</th></tr></thead><tbody id="city-active-detail-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg mt-6 border border-slate-700"><div class="flex justify-between items-center mb-4 px-4"><h3 class="text-lg font-semibold text-white">Clientes S/ Vendas no Mês</h3><button id="export-inactive-pdf-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Exportar Relatório</button></div><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Nome Fantasia</th><th class="px-4 py-3">Cidade</th><th class="px-4 py-3">Bairro</th><th class="px-4 py-3 text-center">Última Compra</th><th class="px-4 py-3">RCA 1</th><th class="px-4 py-3">RCA 2</th></tr></thead><tbody id="city-inactive-detail-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
                             </div>
                         </div>
                         <div id="weekly-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <div class="flex justify-between items-center mb-6"><div><h1 class="text-2xl font-bold text-white"><span style="color: #FFC000;">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Acompanhamento Semanal</p></div><button id="back-to-main-from-weekly-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
-                            <div class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md"><div class="flex flex-col sm:flex-row justify-between items-center gap-4"><div id="weekly-fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2"><button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button><button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button></div><button id="clear-weekly-filters-btn" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button></div><div class="mt-4"><label class="block text-sm font-medium text-slate-300 mb-2">Filtrar Supervisores</label><div id="weekly-supervisor-filter" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"></div></div></div>
-                            <div class="grid grid-cols-1 gap-6"><div class="bg-slate-800 p-4 rounded-lg"><div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white text-center">Faturamento Mensal por Dia da Semana</h2><div class="text-right"><p class="text-slate-400 text-sm">Total do Mês</p><p id="total-mes-semanal" class="text-xl font-bold text-emerald-400">R$ 0,00</p></div></div><div id="weeklySalesChartContainer" class="relative h-96"></div><div class="mt-6 border-t border-slate-700 pt-4"><h3 class="text-md font-semibold text-white mb-3 text-center">Resumo de Faturamento Semanal</h3><div class="overflow-x-auto"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase"><tr><th class="px-4 py-2 bg-slate-700/50 rounded-l-lg">Semana</th><th class="px-4 py-2 bg-slate-700/50 text-right rounded-r-lg">Faturamento Total</th></tr></thead><tbody id="weekly-summary-table-body" class="divide-y divide-slate-700"></tbody></table></div></div></div><div class="grid grid-cols-1 gap-6"><div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-slate-800 p-4 rounded-lg"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Positivação</h2><div id="positivacaoChartContainer" class="relative h-80"></div></div><div class="bg-slate-800 p-4 rounded-lg"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Mix de Produtos (Por PDV)</h2><div id="mixChartContainer" class="relative h-80"></div></div></div><div class="bg-slate-800 p-4 rounded-lg"><h2 class="text-lg font-semibold text-white mb-4 text-center">Top 10 Vendedores (Faturamento)</h2><div id="topSellersChartContainer" class="relative h-80"></div></div></div></div>
+                            <div class="flex justify-between items-center mb-6"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS 3PD</h1><p class="text-lg text-slate-300 -mt-1">Acompanhamento Semanal</p></div><button id="back-to-main-from-weekly-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700"><div class="flex flex-col sm:flex-row justify-between items-center gap-4"><div id="weekly-fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2"><button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button><button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button></div><button id="clear-weekly-filters-btn" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button></div><div class="mt-4"><label class="block text-sm font-medium text-slate-300 mb-2">Filtrar Supervisores</label><div id="weekly-supervisor-filter" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"></div></div></div>
+                            <div class="grid grid-cols-1 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white text-center">Faturamento Mensal por Dia da Semana</h2><div class="text-right"><p class="text-slate-400 text-sm">Total do Mês</p><p id="total-mes-semanal" class="text-xl font-bold text-emerald-400">R$ 0,00</p></div></div><div id="weeklySalesChartContainer" class="relative h-96"></div><div class="mt-6 border-t border-slate-700 pt-4"><h3 class="text-md font-semibold text-white mb-3 text-center">Resumo de Faturamento Semanal</h3><div class="overflow-x-auto"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase"><tr><th class="px-4 py-2 bg-slate-700/50 rounded-l-lg">Semana</th><th class="px-4 py-2 bg-slate-700/50 text-right rounded-r-lg">Faturamento Total</th></tr></thead><tbody id="weekly-summary-table-body" class="divide-y divide-slate-700"></tbody></table></div></div></div><div class="grid grid-cols-1 gap-6"><div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Positivação</h2><div id="positivacaoChartContainer" class="relative h-80"></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Mix de Produtos (Por PDV)</h2><div id="mixChartContainer" class="relative h-80"></div></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white mb-4 text-center">Top 10 Vendedores (Faturamento)</h2><div id="topSellersChartContainer" class="relative h-80"></div></div></div></div>
                         </div>
                         <div id="comparison-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <div class="flex justify-between items-center mb-6"><div><h1 class="text-2xl font-bold text-white"><span style="color: #FFC000;">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Comparativo entre Meses</p></div><button id="back-to-main-from-comparison-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
-                            <div class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md">
+                            <div class="flex justify-between items-center mb-6"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS 3PD</h1><p class="text-lg text-slate-300 -mt-1">Comparativo entre Meses</p></div><button id="back-to-main-from-comparison-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
                                 <div id="comparison-rede-filter-wrapper" class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
                                     <div class="relative w-full sm:w-1/2">
                                         <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
@@ -3279,7 +3478,7 @@
                             </div>
                             <div id="comparison-kpi-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6"></div>
                             <div class="grid grid-cols-1 gap-6">
-                                <div class="bg-slate-800 p-4 rounded-lg">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
                                     <div class="flex justify-center items-center mb-4 relative">
                                         <h2 id="comparison-chart-title" class="text-lg font-semibold text-white text-center">Comparativo de Faturamento Semanal</h2>
                                         <div class="absolute right-0 top-0 bottom-0 flex items-center">
@@ -3292,19 +3491,19 @@
                                     <div id="weeklyComparisonChartContainer" class="relative h-96"></div>
                                     <div id="monthlyComparisonChartContainer" class="relative h-96 hidden"></div>
                                 </div>
-                                <div class="bg-slate-800 p-4 rounded-lg">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
                                     <h2 class="text-lg font-semibold text-white text-center mb-4">Faturamento por Dia da Semana</h2>
                                     <div id="dailyWeeklyComparisonChartContainer" class="relative h-96"></div>
                                 </div>
-                                <div class="bg-slate-800 p-4 rounded-lg"><h2 class="text-lg font-semibold text-white text-center mb-4">Variação de Faturamento por Supervisor</h2><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Supervisor</th><th class="px-4 py-3 text-right">Média Trim.</th><th class="px-4 py-3 text-right">Fat. Mês Atual</th><th class="px-4 py-3 text-right">Variação</th></tr></thead><tbody id="supervisorComparisonTableBody" class="divide-y divide-slate-700"></tbody></table></div></div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white text-center mb-4">Variação de Faturamento por Supervisor</h2><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Supervisor</th><th class="px-4 py-3 text-right">Média Trim.</th><th class="px-4 py-3 text-right">Fat. Mês Atual</th><th class="px-4 py-3 text-right">Variação</th></tr></thead><tbody id="supervisorComparisonTableBody" class="divide-y divide-slate-700"></tbody></table></div></div>
                             </div>
                         </div>
                         <div id="stock-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
                             <div class="flex justify-between items-center mb-6">
-                                <div><h1 class="text-2xl font-bold text-white"><span style="color: #FFC000;">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Estoque</p></div>
+                                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS 3PD</h1><p class="text-lg text-slate-300 -mt-1">Análise de Estoque</p></div>
                                 <button id="back-to-main-from-stock-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
                             </div>
-                            <div class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md">
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
                                 <div id="stock-rede-filter-wrapper" class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
                                     <div class="relative w-full sm:w-1/2">
                                         <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
@@ -3380,7 +3579,7 @@
                                     <button id="clear-stock-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
                                 </div>
                             </div>
-                            <div class="bg-slate-800 p-4 rounded-lg mb-6">
+                            <div class="bg-[#1d2347] p-4 rounded-lg mb-6 border border-slate-700">
                                 <h2 class="text-lg font-semibold text-white text-center mb-4">Análise de Estoque e Tendência de Saída</h2>
                                 <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
                                     <table class="min-w-full text-sm text-left">
@@ -3398,7 +3597,7 @@
                                 </div>
                             </div>
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <div class="bg-slate-800 p-4 rounded-lg">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
                                     <h2 class="text-lg font-semibold text-white text-center mb-4">Produtos com Crescimento</h2>
                                     <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
                                         <table class="min-w-full text-sm">
@@ -3407,7 +3606,7 @@
                                         </table>
                                     </div>
                                 </div>
-                                <div class="bg-slate-800 p-4 rounded-lg">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
                                     <h2 class="text-lg font-semibold text-white text-center mb-4">Produtos com Queda</h2>
                                     <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
                                         <table class="min-w-full text-sm">
@@ -3416,7 +3615,7 @@
                                         </table>
                                     </div>
                                 </div>
-                                <div class="bg-slate-800 p-4 rounded-lg">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
                                     <h2 class="text-lg font-semibold text-white text-center mb-4">Novos - Vendidos este Mês</h2>
                                     <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
                                         <table class="min-w-full text-sm">
@@ -3425,7 +3624,7 @@
                                         </table>
                                     </div>
                                 </div>
-                                <div class="bg-slate-800 p-4 rounded-lg">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
                                     <h2 class="text-lg font-semibold text-white text-center mb-4">Perdidos - Não vendidos este Mês</h2>
                                     <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
                                         <table class="min-w-full text-sm">
@@ -3440,18 +3639,23 @@
                         <!-- INÍCIO DA VIEW DE INOVAÇÕES -->
                         <div id="innovations-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
                             <div class="flex justify-between items-center mb-6">
-                                <div><h1 class="text-2xl font-bold text-white"><span style="color: #FFC000;">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Inovações</p></div>
+                                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS 3PD</h1><p class="text-lg text-slate-300 -mt-1">Análise de Inovações</p></div>
                                 <button id="back-to-main-from-innovations-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
                             </div>
                             
                             <!-- KPIs Principais -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                <div class="bg-slate-800 p-6 rounded-lg text-center">
-                                    <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Base para Cobertura)</p>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                                <div class="bg-[#1d2347] p-6 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Base)</p>
                                     <p id="innovations-active-clients-kpi" class="text-4xl font-bold text-teal-400 my-2">0</p>
                                     <p class="text-xs text-slate-500">Regra: RCA 1 diferente de 53 e RCA 1 diferente de RCA 2.</p>
                                 </div>
-                                <div class="bg-slate-800 p-6 rounded-lg text-center">
+                                <div class="bg-[#1d2347] p-6 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura da Seleção</p>
+                                    <p id="innovations-selection-coverage-value-kpi" class="text-4xl font-bold text-amber-400 my-2">0%</p>
+                                    <p id="innovations-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de X clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-6 rounded-lg text-center border border-slate-700">
                                     <p class="text-slate-400 text-sm font-medium">Produto com Maior Cobertura</p>
                                     <p id="innovations-top-coverage-product-kpi" class="text-2xl font-bold text-white my-1 truncate" title="Nenhum produto analisado">-</p>
                                     <p id="innovations-top-coverage-value-kpi" class="text-2xl font-bold text-teal-400">0%</p>
@@ -3459,7 +3663,7 @@
                             </div>
 
                             <!-- FILTROS -->
-                            <div class="mb-6 p-4 bg-slate-800 rounded-lg shadow-md">
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                                     <div>
                                         <label for="innovations-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
@@ -3506,7 +3710,7 @@
                             </div>
 
                             <!-- TABELA DE RESULTADOS -->
-                            <div id="innovations-table-container" class="bg-slate-800 p-4 rounded-lg">
+                            <div id="innovations-table-container" class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
                                 <div id="innovations-placeholder" class="text-center py-16">
                                     <p class="text-slate-500 text-lg">Aguardando filtro de produtos...</p>
                                 </div>
