@@ -612,6 +612,8 @@
         let selectedInnovationsSuppliers = [];
         let selectedInnovationsProducts = [];
         
+        let globalInnovationsKPI = { activeClients: 0, topProduct: { product: '-', coverage: 0 } };
+        
         const lastSaleDate = allSalesData.length > 0 ? new Date(Math.max.apply(null, allSalesData.map(s => parseDate(s.DTPED)).filter(d => d && !isNaN(d)))) : new Date();
         lastSaleDate.setHours(0,0,0,0);
         let calendarState = { year: lastSaleDate.getFullYear(), month: lastSaleDate.getMonth() };
@@ -1367,7 +1369,7 @@
 
             while (startDate <= lastDayOfMonth) {
                 let endDate = new Date(startDate);
-                endDate.setDate(startDate.getDate() + 6);
+                endDate.setDate(endDate.getDate() + 6);
                 endDate.setHours(23, 59, 59, 999);
                 weeks.push({ start: new Date(startDate), end: new Date(endDate) });
                 startDate.setDate(startDate.getDate() + 7);
@@ -1881,7 +1883,7 @@
                     }
                 }
                 const monthlyCurrentTotalFat = monthlyCurrentSales.reduce((sum, item) => sum + item.VLVENDA, 0);
-
+        
                 const salesByMonth = {};
                 historySales.forEach(sale => {
                     const saleDate = parseDate(sale.DTPED);
@@ -2122,7 +2124,7 @@
                 const totalSold = productHistorySales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
                 const saleDays = salesByDay.size;
                 const dailyAvgSale = saleDays > 0 ? totalSold / saleDays : 0;
-                const monthlyAvgSale = dailyAvgSale * 22; 
+                const monthlyAvgSale = dailyAvgSale * 22; // Estimativa de 22 dias úteis
                 const trendDays = dailyAvgSale > 0 ? (stock / dailyAvgSale) : Infinity;
 
                 const currentMonthSalesQty = filteredSales
@@ -2215,6 +2217,35 @@
         // =================================================================
         // || INÍCIO DAS FUNÇÕES DA PÁGINA DE INOVAÇÕES                 ||
         // =================================================================
+        
+        function calculateAndSetGlobalInnovationsKPI() {
+            const activeClients = allClientsData.filter(c => {
+                const rca1 = String(c.rca1 || '').trim();
+                const rca2 = String(c.rca2 || '').trim();
+                return rca1 && rca1 !== '53' && rca1 !== rca2;
+            });
+            const activeClientsCount = activeClients.length;
+            const activeClientCodes = new Set(activeClients.map(c => c['Código']));
+
+            let topCoverage = { product: '-', coverage: 0 };
+            if (activeClientsCount > 0) {
+                const allProductsInScope = [...new Set(allSalesData.map(s => s.PRODUTO))];
+                allProductsInScope.forEach(productCode => {
+                    const clientsWhoBought = new Set(allSalesData.filter(s => s.PRODUTO === productCode && s.VLVENDA > 0).map(s => s.CODCLI));
+                    const coveredCount = [...clientsWhoBought].filter(code => activeClientCodes.has(code)).length;
+                    const currentCoverage = (coveredCount / activeClientsCount) * 100;
+                    
+                    if (currentCoverage > topCoverage.coverage) {
+                        const productInfo = allSalesData.find(s => s.PRODUTO === productCode);
+                        topCoverage = {
+                            product: productInfo ? `(${productInfo.PRODUTO}) ${productInfo.DESCRICAO}` : `Produto ${productCode}`,
+                            coverage: currentCoverage
+                        };
+                    }
+                });
+            }
+            globalInnovationsKPI = { activeClients: activeClientsCount, topProduct: topCoverage };
+        }
 
         function getInnovationsFilteredData(options = {}) {
             const { excludeFilter = null } = options;
@@ -2252,8 +2283,14 @@
         }
 
         function updateInnovationsFilters() {
-            const productOptionsData = getInnovationsFilteredData({ excludeFilter: 'product' }).historySales;
-            updateProductFilter(innovationsProductFilterDropdown, innovationsProductFilterText, selectedInnovationsProducts, productOptionsData, 'innovations');
+            const filteredData = getInnovationsFilteredData({ excludeFilter: 'product' });
+            let productSource = filteredData.historySales;
+
+            if (selectedInnovationsSuppliers.length > 0) {
+                 productSource = productSource.filter(s => selectedInnovationsSuppliers.includes(String(s.CODFOR)));
+            }
+            
+            updateProductFilter(innovationsProductFilterDropdown, innovationsProductFilterText, selectedInnovationsProducts, productSource, 'innovations');
             innovationsProductFilterText.textContent = selectedInnovationsProducts.length > 0 ? `${selectedInnovationsProducts.length} produtos selecionados` : 'Selecione um ou mais produtos';
         }
 
@@ -2270,10 +2307,15 @@
         }
         
         function updateInnovationsView() {
+            // Atualiza os KPIs fixos que foram pré-calculados
+            innovationsActiveClientsKpi.textContent = globalInnovationsKPI.activeClients.toLocaleString('pt-BR');
+            innovationsTopCoverageProductKpi.textContent = globalInnovationsKPI.topProduct.product;
+            innovationsTopCoverageProductKpi.title = globalInnovationsKPI.topProduct.product;
+            innovationsTopCoverageValueKpi.textContent = `${globalInnovationsKPI.topProduct.coverage.toFixed(2)}%`;
+            
             const filteredData = getInnovationsFilteredData();
             const { clients, currentSales, historySales } = filteredData;
             
-            // 1. CALCULAR A BASE DE CLIENTES ATIVOS COM A REGRA ESPECIAL
             const activeClientsForCoverage = clients.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
                 const rca2 = String(c.rca2 || '').trim();
@@ -2281,9 +2323,7 @@
             });
             const activeClientsCount = activeClientsForCoverage.length;
             const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['Código']));
-            innovationsActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
-
-            // 2. LÓGICA DA TABELA E KPIs
+            
             const productsToAnalyze = selectedInnovationsProducts;
 
             if (productsToAnalyze.length === 0) {
@@ -2327,6 +2367,9 @@
                     });
                 });
 
+                // Ordenar a tabela por cobertura (decrescente)
+                tableData.sort((a, b) => b.coverage - a.coverage);
+
                 innovationsTableBody.innerHTML = tableData.map(item => `
                     <tr class="hover:bg-slate-700/50">
                         <td class="px-4 py-2 text-xs">${item.descricao}</td>
@@ -2337,31 +2380,6 @@
                     </tr>
                 `).join('');
             }
-
-            // 3. ATUALIZAR KPI DE MAIOR COBERTURA
-            let topCoverage = { product: '-', coverage: 0 };
-            if (activeClientsCount > 0) {
-                const allProductsInScope = [...new Set(filteredData.currentSales.map(s => s.PRODUTO))];
-                allProductsInScope.forEach(productCode => {
-                    const clientsWhoBought = new Set(
-                        filteredData.currentSales.filter(s => s.PRODUTO === productCode && s.VLVENDA > 0).map(s => s.CODCLI)
-                    );
-                    const coveredCount = [...clientsWhoBought].filter(code => activeClientCodes.has(code)).length;
-                    const currentCoverage = (coveredCount / activeClientsCount) * 100;
-                    
-                    if (currentCoverage > topCoverage.coverage) {
-                        const productInfo = allSalesData.find(s => s.PRODUTO === productCode);
-                        topCoverage = {
-                            product: productInfo ? `(${productInfo.PRODUTO}) ${productInfo.DESCRICAO}` : `Produto ${productCode}`,
-                            coverage: currentCoverage
-                        };
-                    }
-                });
-            }
-            
-            innovationsTopCoverageProductKpi.textContent = topCoverage.product;
-            innovationsTopCoverageProductKpi.title = topCoverage.product;
-            innovationsTopCoverageValueKpi.textContent = `${topCoverage.coverage.toFixed(2)}%`;
         }
 
         // =================================================================
@@ -2850,6 +2868,7 @@
                 populateSupervisors('innovations-supervisor-filter', allSalesData);
                 updateSellerFilter('', innovationsVendedorFilterDropdown, innovationsVendedorFilterText, [], allSalesData);
                 updateSupplierFilter(innovationsSupplierFilterDropdown, innovationsSupplierFilterText, [], allSalesData, 'innovations');
+                calculateAndSetGlobalInnovationsKPI(); // Calcula o KPI global uma vez
                 updateInnovationsFilters(); 
                 updateInnovationsView();
             });
@@ -2897,6 +2916,13 @@
                         selectedInnovationsSuppliers = selectedInnovationsSuppliers.filter(s => s !== value);
                     }
                     updateSupplierFilter(innovationsSupplierFilterDropdown, innovationsSupplierFilterText, selectedInnovationsSuppliers, allSalesData, 'innovations');
+                    
+                    // NOVA LÓGICA: Atualiza a seleção de produtos com base no fornecedor
+                    const supplierProducts = allSalesData
+                        .filter(s => selectedInnovationsSuppliers.includes(String(s.CODFOR)))
+                        .map(s => s.PRODUTO);
+                    selectedInnovationsProducts = [...new Set(supplierProducts)];
+
                     handleInnovationsFilterChange();
                 }
             });
