@@ -29,6 +29,11 @@
             height: 100%; 
             transition: width 0.3s ease-in-out; 
         }
+        .stock-trend-btn.active {
+            outline: 2px solid #fff;
+            outline-offset: 2px;
+            transform: scale(1.1);
+        }
     </style>
 </head>
 <body class="text-slate-200 flex items-center justify-center min-h-screen">
@@ -304,7 +309,9 @@
 
                 self.postMessage({ type: 'progress', status: 'Mapeando vendedores...', percentage: 60 });
                 const rcaInfoMap = new Map();
-                [...salesDataRaw, ...historyDataRaw].forEach(row => {
+                
+                // Otimização: Iterar sobre os arrays separadamente para evitar a criação de um novo array grande
+                const populateRcaMap = (row) => {
                     const codusur = String(row['CODUSUR'] || '').trim();
                     if (codusur && !rcaInfoMap.has(codusur)) {
                         rcaInfoMap.set(codusur, {
@@ -312,7 +319,9 @@
                             SUPERV: String(row['SUPERV'] || '')
                         });
                     }
-                });
+                };
+                salesDataRaw.forEach(populateRcaMap);
+                historyDataRaw.forEach(populateRcaMap);
 
                 self.postMessage({ type: 'progress', status: 'Reatribuindo vendas do trimestre...', percentage: 65 });
                 const reattributedHistoryDataRaw = historyDataRaw.map(sale => {
@@ -381,16 +390,18 @@
                     data.forEach(row => {
                         if (!row.PEDIDO) return;
                         if (!orders[row.PEDIDO]) {
-                            orders[row.PEDIDO] = { ...row, QTVENDA: 0, VLVENDA: 0, TOTPESOLIQ: 0, FORNECEDORES: new Set() };
+                            orders[row.PEDIDO] = { ...row, QTVENDA: 0, VLVENDA: 0, TOTPESOLIQ: 0, FORNECEDORES: new Set(), CODFORS: new Set() };
                         }
                         orders[row.PEDIDO].QTVENDA += row.QTVENDA;
                         orders[row.PEDIDO].VLVENDA += row.VLVENDA;
                         orders[row.PEDIDO].TOTPESOLIQ += row.TOTPESOLIQ;
                         if (row.OBSERVACAOFOR) orders[row.PEDIDO].FORNECEDORES.add(row.OBSERVACAOFOR);
+                        if (row.CODFOR) orders[row.PEDIDO].CODFORS.add(row.CODFOR);
                     });
                     return Object.values(orders).map(order => {
                         order.FORNECEDORES_LIST = Array.from(order.FORNECEDORES);
                         order.FORNECEDORES_STR = order.FORNECEDORES_LIST.join(', ');
+                        order.CODFORS_LIST = Array.from(order.CODFORS);
                         return order;
                     });
                 };
@@ -449,21 +460,24 @@
             // Mapeia RCAs (vendedores) por seus supervisores
             optimizedData.rcasBySupervisor = new Map();
             const supervisorToRcaMap = new Map();
-            [...allSalesData, ...allHistoryData].forEach(sale => {
-                if (sale.CODUSUR && sale.SUPERV) {
+            const populateSupervisorMap = (sale) => {
+                 if (sale.CODUSUR && sale.SUPERV) {
                     if (!supervisorToRcaMap.has(sale.SUPERV)) {
                         supervisorToRcaMap.set(sale.SUPERV, new Set());
                     }
                     supervisorToRcaMap.get(sale.SUPERV).add(sale.CODUSUR);
                 }
-            });
+            };
+            allSalesData.forEach(populateSupervisorMap);
+            allHistoryData.forEach(populateSupervisorMap);
+
             supervisorToRcaMap.forEach((rcas, supervisor) => {
                 optimizedData.rcasBySupervisor.set(supervisor, Array.from(rcas));
             });
 
             // Mapeia produtos por fornecedor
             optimizedData.productsBySupplier = new Map();
-            [...allSalesData, ...allHistoryData].forEach(sale => {
+            const populateProductMap = (sale) => {
                 if (sale.CODFOR && sale.PRODUTO) {
                     const codfor = String(sale.CODFOR);
                     if (!optimizedData.productsBySupplier.has(codfor)) {
@@ -471,7 +485,10 @@
                     }
                     optimizedData.productsBySupplier.get(codfor).add(sale.PRODUTO);
                 }
-            });
+            };
+            allSalesData.forEach(populateProductMap);
+            allHistoryData.forEach(populateProductMap);
+
 
             // Mapeia vendas (atuais e históricas) por código de produto para acesso rápido
             optimizedData.salesByProduct = { current: new Map(), history: new Map() };
@@ -494,9 +511,11 @@
 
             // Mapeia CODUSUR (RCA) pelo nome do vendedor
             optimizedData.rcaCodeByName = new Map();
-             [...allSalesData, ...allHistoryData].forEach(s => {
+            const populateRcaCodeMap = (s) => {
                 if(s.NOME && s.CODUSUR) optimizedData.rcaCodeByName.set(s.NOME, s.CODUSUR);
-            });
+            };
+            allSalesData.forEach(populateRcaCodeMap);
+            allHistoryData.forEach(populateRcaCodeMap);
         }
         // =================================================================
         // || FIM DAS ESTRUTURAS OTIMIZADAS                                 ||
@@ -542,6 +561,7 @@
         const pesoBtn = document.getElementById('pesoBtn');
         
         const supervisorFilter = document.getElementById('supervisor-filter');
+        const fornecedorFilter = document.getElementById('fornecedor-filter'); // NOVO FILTRO
         const vendedorFilterBtn = document.getElementById('vendedor-filter-btn');
         const vendedorFilterText = document.getElementById('vendedor-filter-text');
         const vendedorFilterDropdown = document.getElementById('vendedor-filter-dropdown');
@@ -699,6 +719,7 @@
         let selectedStockProducts = [];
         let historicalBests = {};
         let selectedHolidays = [];
+        let stockTrendFilter = 'all'; // NOVO ESTADO PARA FILTRO DE TENDÊNCIA
         
         let selectedMainRedes = [];
         let selectedCityRedes = [];
@@ -764,15 +785,31 @@
             };
             const salesByProduct = {};
             const faturamentoMap = new Map();
-            const clientsPositivados = new Set();
-            let totalSkus = 0;
+            
+            // Lógica para contar clientes positivados, igual à da página de Comparativo
+            const salesByClient = new Map();
+            data.forEach(sale => {
+                if (!sale.CODCLI) return;
+                const clientTotal = salesByClient.get(sale.CODCLI) || 0;
+                salesByClient.set(sale.CODCLI, clientTotal + sale.VLVENDA);
+            });
 
+            let positiveClientsCount = 0;
+            const threshold = 1; // Considera clientes com vendas acima de R$ 1,00
+            for (const total of salesByClient.values()) {
+                if (total > threshold) {
+                    positiveClientsCount++;
+                }
+            }
+            summary.positivacaoCount = positiveClientsCount;
+
+
+            let totalSkus = 0;
             data.forEach(item => {
                 summary.totalFaturamento += item.VLVENDA;
                 summary.totalPeso += item.TOTPESOLIQ;
 
                 if(item.VLVENDA > 0) {
-                    clientsPositivados.add(item.CODCLI);
                     totalSkus++;
                 }
 
@@ -802,7 +839,6 @@
             });
 
             const totalRelevantClients = clientBaseForPositivacao.length;
-            summary.positivacaoCount = clientsPositivados.size;
             summary.positivacaoPercent = totalRelevantClients > 0 ? (summary.positivacaoCount / totalRelevantClients) * 100 : 0;
             summary.skuPdv = summary.positivacaoCount > 0 ? totalSkus / summary.positivacaoCount : 0;
 
@@ -966,35 +1002,41 @@
             const supervisor = supervisorFilter.value;
             const posicao = posicaoFilter.value;
             const codcli = codcliFilter.value.trim();
+            const selectedFornecedor = fornecedorFilter.value;
             
-            // CORREÇÃO: Usar a base de clientes ativos da regra de inovações como ponto de partida
-            const innovationsActiveClients = allClientsData.filter(c => {
+            // --- CÁLCULO DA BASE DE CLIENTES PARA O KPI DE COBERTURA ---
+            // 1. Define a base de clientes ativos conforme a regra da página de Inovações.
+            let clientBaseForCoverage = allClientsData.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
                 const rca2 = String(c.rca2 || '').trim();
                 const isAmericanas = c.razaoSocial.toUpperCase().includes('AMERICANAS');
                 return rca1 && rca1 !== '53' && rca1 !== rca2 && !isAmericanas;
             });
 
-            let clientsForAnalysis = [...innovationsActiveClients];
-            
+            // 2. Aplica os filtros da página principal (como Rede) a esta base de clientes.
             if (mainRedeGroupFilter === 'com_rede') {
-                clientsForAnalysis = clientsForAnalysis.filter(c => c.ramo && c.ramo !== 'N/A');
+                clientBaseForCoverage = clientBaseForCoverage.filter(c => c.ramo && c.ramo !== 'N/A');
                 if (selectedMainRedes.length > 0) {
-                    clientsForAnalysis = clientsForAnalysis.filter(c => selectedMainRedes.includes(c.ramo));
+                    clientBaseForCoverage = clientBaseForCoverage.filter(c => selectedMainRedes.includes(c.ramo));
                 }
             } else if (mainRedeGroupFilter === 'sem_rede') {
-                clientsForAnalysis = clientsForAnalysis.filter(c => !c.ramo || c.ramo === 'N/A');
+                clientBaseForCoverage = clientBaseForCoverage.filter(c => !c.ramo || c.ramo === 'N/A');
             }
-            const clientCodesForAnalysis = new Set(clientsForAnalysis.map(c => c['Código']));
+            // A variável 'clientBaseForCoverage' agora contém o denominador correto para o percentual.
 
-            let filteredSalesData = allSalesData.filter(s => clientCodesForAnalysis.has(s.CODCLI));
-            let filteredHistoryData = allHistoryData.filter(s => clientCodesForAnalysis.has(s.CODCLI));
-
+            // --- FILTRAGEM DOS DADOS DE VENDAS E HISTÓRICO ---
+            let filteredSalesData = [...allSalesData];
+            let filteredHistoryData = [...allHistoryData];
+            
             if (codcli && !allClientsData.some(c => String(c['Código']) === codcli)) return;
 
             if (currentFornecedor) {
                  filteredSalesData = filteredSalesData.filter(row => String(row.OBSERVACAOFOR).trim() === currentFornecedor);
                  filteredHistoryData = filteredHistoryData.filter(row => String(row.OBSERVACAOFOR).trim() === currentFornecedor);
+            }
+            if (selectedFornecedor) {
+                filteredSalesData = filteredSalesData.filter(row => String(row.CODFOR) === selectedFornecedor);
+                filteredHistoryData = filteredHistoryData.filter(row => String(row.CODFOR) === selectedFornecedor);
             }
             if (codcli) {
                 filteredSalesData = filteredSalesData.filter(row => row.CODCLI === codcli);
@@ -1011,21 +1053,35 @@
             }
             if (posicao) filteredSalesData = filteredSalesData.filter(row => row.POSICAO === posicao);
             
+            // Filtra também por Rede, se aplicável, para os outros KPIs como Faturamento, Peso, etc.
+            if (mainRedeGroupFilter) {
+                const clientCodesInRede = new Set(clientBaseForCoverage.map(c => c['Código']));
+                filteredSalesData = filteredSalesData.filter(s => clientCodesInRede.has(s.CODCLI));
+                filteredHistoryData = filteredHistoryData.filter(s => clientCodesInRede.has(s.CODCLI));
+            }
+
             const filteredTableData = aggregatedOrders.filter(order => {
-                if(!clientCodesForAnalysis.has(order.CODCLI)) return false;
+                // A lógica de filtragem da tabela precisa ser consistente com filteredSalesData
                 let matches = true;
+                if (mainRedeGroupFilter) {
+                    const clientCodesInRede = new Set(clientBaseForCoverage.map(c => c['Código']));
+                    matches = matches && clientCodesInRede.has(order.CODCLI);
+                }
                 if (codcli) matches = matches && order.CODCLI === codcli;
                 else {
                     if (supervisor) matches = matches && order.SUPERV === supervisor;
                     if (selectedSellers.length > 0) matches = matches && selectedSellers.includes(order.NOME);
                 }
                 if (currentFornecedor) matches = matches && order.FORNECEDORES_LIST.includes(currentFornecedor);
+                if (selectedFornecedor) matches = matches && order.CODFORS_LIST && order.CODFORS_LIST.includes(selectedFornecedor);
                 if (posicao) matches = matches && order.POSICAO === posicao;
                 return matches;
             });
             
-            const isFiltered = !!supervisor || selectedSellers.length > 0 || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter;
-            const summary = calculateSummaryFromData(filteredSalesData, isFiltered, clientsForAnalysis);
+            const isFiltered = !!supervisor || selectedSellers.length > 0 || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter || !!selectedFornecedor;
+            
+            // Passa os dados de vendas filtrados e a base de clientes correta para o cálculo.
+            const summary = calculateSummaryFromData(filteredSalesData, isFiltered, clientBaseForCoverage);
             
             // Update main KPIs
             totalVendasEl.textContent = summary.totalFaturamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -1071,6 +1127,23 @@
             else supervisorFilterEl.value = '';
         }
 
+        function populateMainSupplierFilter(filterElementId, dataSource) {
+            const filterEl = document.getElementById(filterElementId);
+            if (!filterEl) return;
+            const suppliers = new Map();
+            dataSource.forEach(s => {
+                if (s.CODFOR && s.FORNECEDOR) {
+                    suppliers.set(s.CODFOR, s.FORNECEDOR);
+                }
+            });
+            const sortedSuppliers = [...suppliers.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+
+            filterEl.innerHTML = '<option value="">Todos</option>';
+            sortedSuppliers.forEach(([cod, name]) => {
+                filterEl.innerHTML += `<option value="${cod}">${cod} - ${name}</option>`;
+            });
+        }
+
         function updateSellerFilter(supervisor, dropdown, filterText, selectedArray, dataSource) {
             const sellersToShow = supervisor ? [...new Set(dataSource.filter(s => s.SUPERV === supervisor).map(s => s.NOME))].sort() : [...new Set(dataSource.map(item => item.NOME).filter(Boolean))].sort();
             selectedArray = selectedArray.filter(seller => sellersToShow.includes(seller));
@@ -1102,6 +1175,7 @@
 
         function resetMainFilters() {
             supervisorFilter.value = ''; 
+            fornecedorFilter.value = '';
             posicaoFilter.value = ''; 
             codcliFilter.value = ''; 
             currentFornecedor = ''; 
@@ -1173,6 +1247,10 @@
             selectedStockProducts = [];
             stockRedeGroupFilter = '';
             selectedStockRedes = [];
+            stockTrendFilter = 'all';
+
+            document.querySelectorAll('.stock-trend-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector('.stock-trend-btn[data-trend="all"]').classList.add('active');
 
             stockRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
             stockRedeGroupContainer.querySelector('button[data-group=""]').classList.add('active');
@@ -2242,23 +2320,28 @@
                 const stock = activeStockMap.get(product.code) || 0;
                 
                 const productHistorySales = filteredHistory.filter(s => s.PRODUTO === product.code);
+                const totalHistoryQty = productHistorySales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                const monthlyAvgSale = totalHistoryQty / 3; 
+
+                const productCurrentSales = filteredSales.filter(s => s.PRODUTO === product.code);
+                const combinedSalesForTrend = [...productHistorySales, ...productCurrentSales];
+                
                 const salesByDay = new Map();
-                productHistorySales.forEach(s => {
-                    const date = formatDate(s.DTPED);
+                combinedSalesForTrend.forEach(s => {
+                    const date = parseDate(s.DTPED);
                     if (date) {
-                        const currentQty = salesByDay.get(date) || 0;
-                        salesByDay.set(date, currentQty + s.QTVENDA_EMBALAGEM_MASTER);
+                        const dateString = date.toISOString().split('T')[0];
+                        const currentQty = salesByDay.get(dateString) || 0;
+                        salesByDay.set(dateString, currentQty + s.QTVENDA_EMBALAGEM_MASTER);
                     }
                 });
                 
-                const totalSold = productHistorySales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                const totalSoldForTrend = combinedSalesForTrend.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
                 const saleDays = salesByDay.size;
-                const dailyAvgSale = saleDays > 0 ? totalSold / saleDays : 0;
-                const monthlyAvgSale = dailyAvgSale * 22; // Estimativa de 22 dias úteis
-                const trendDays = dailyAvgSale > 0 ? (stock / dailyAvgSale) : Infinity;
+                const dailyAvgSaleForTrend = saleDays > 0 ? totalSoldForTrend / saleDays : 0;
+                const trendDays = dailyAvgSaleForTrend > 0 ? (stock / dailyAvgSaleForTrend) : Infinity;
 
-                const currentMonthSalesQty = filteredSales
-                    .filter(s => s.PRODUTO === product.code)
+                const currentMonthSalesQty = productCurrentSales
                     .reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
 
                 productAnalysis.set(product.code, {
@@ -2272,11 +2355,21 @@
                 });
             });
 
-            const sortedAnalysis = [...productAnalysis.values()].sort((a, b) => {
+            let sortedAnalysis = [...productAnalysis.values()].sort((a, b) => {
                 const trendA = isFinite(a.trendDays) ? a.trendDays : 9999;
                 const trendB = isFinite(b.trendDays) ? b.trendDays : 9999;
                 return trendA - trendB;
             });
+
+            if (stockTrendFilter !== 'all') {
+                sortedAnalysis = sortedAnalysis.filter(item => {
+                    const trend = item.trendDays;
+                    if (stockTrendFilter === 'low') return isFinite(trend) && trend < 15;
+                    if (stockTrendFilter === 'medium') return isFinite(trend) && trend >= 15 && trend < 30;
+                    if (stockTrendFilter === 'good') return isFinite(trend) && trend >= 30;
+                    return false;
+                });
+            }
 
             stockAnalysisTableBody.innerHTML = sortedAnalysis.map(item => {
                 const trendText = isFinite(item.trendDays) ? `${Math.floor(item.trendDays)} dias` : 'N/A';
@@ -2290,7 +2383,7 @@
                 return `
                     <tr class="hover:bg-slate-700/50">
                         <td class="px-4 py-2 text-xs">(${item.code}) ${item.descricao}</td>
-                        <td class="px-4 py-2 text-xs">${item.fornecedor}</td>
+                        <td class="px-4 py-2 text-xs">(${item.codfor}) ${item.fornecedor}</td>
                         <td class="px-4 py-2 text-right text-xs">${item.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                         <td class="px-4 py-2 text-right text-xs">${item.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                         <td class="px-4 py-2 text-right text-xs font-bold ${trendColor}">${trendText}</td>
@@ -2319,14 +2412,16 @@
 
             const renderProductTable = (bodyElement, data, showVariation = true) => {
                 bodyElement.innerHTML = data.map(p => {
-                    const variation = p.monthlyAvgSale > 0 ? p.currentMonthSalesQty - p.monthlyAvgSale : p.currentMonthSalesQty;
+                    const variation = p.monthlyAvgSale > 0 ? ((p.currentMonthSalesQty - p.monthlyAvgSale) / p.monthlyAvgSale) * 100 : (p.currentMonthSalesQty > 0 ? 100 : 0);
                     const colorClass = variation > 0 ? 'text-green-400' : 'text-red-400';
+                    const variationText = p.monthlyAvgSale > 0 ? `${variation.toFixed(0)}%` : (p.currentMonthSalesQty > 0 ? 'Novo' : '0%');
+
                     return `
                         <tr class="hover:bg-slate-700/50">
                             <td class="px-2 py-1.5 text-xs">(${p.code}) ${p.descricao}</td>
                             <td class="px-2 py-1.5 text-xs text-right">${p.currentMonthSalesQty.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                             <td class="px-2 py-1.5 text-xs text-right">${p.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                            ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass}">${variation.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>` : ''}
+                            ${showVariation ? `<td class="px-2 py-1.5 text-xs text-right font-bold ${colorClass}">${variationText}</td>` : ''}
                             <td class="px-2 py-1.5 text-xs text-right">${p.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                         </tr>
                     `;
@@ -2700,6 +2795,7 @@
             backToMainFromStockBtn.addEventListener('click', () => { stockView.classList.add('hidden'); mainDashboard.classList.remove('hidden'); updateAllVisuals(); }); 
             
             supervisorFilter.addEventListener('change', () => { selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateAllVisuals(); });
+            fornecedorFilter.addEventListener('change', updateAllVisuals);
             vendedorFilterBtn.addEventListener('click', () => vendedorFilterDropdown.classList.toggle('hidden'));
             vendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedSellers.push(value); else selectedSellers = selectedSellers.filter(s => s !== value); selectedSellers = updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateAllVisuals(); } });
             posicaoFilter.addEventListener('change', updateAllVisuals);
@@ -2954,6 +3050,16 @@
                 }
             });
 
+            document.getElementById('stock-trend-filter-container').addEventListener('click', (e) => {
+                const button = e.target.closest('.stock-trend-btn');
+                if (button) {
+                    stockTrendFilter = button.dataset.trend;
+                    document.querySelectorAll('.stock-trend-btn').forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    updateStockView();
+                }
+            });
+
 
             comparisonTendencyToggle.addEventListener('click', () => { 
                 useTendencyComparison = !useTendencyComparison; 
@@ -3146,6 +3252,7 @@
         initializeOptimizedDataStructures(); // Pré-processa os dados para performance
         calculateHistoricalBests();
         populateSupervisors('supervisor-filter', allSalesData);
+        populateMainSupplierFilter('fornecedor-filter', [...allSalesData, ...allHistoryData]);
         populateSupervisors('city-supervisor-filter', allSalesData);
         populateSupervisors('stock-supervisor-filter', allSalesData);
         updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
@@ -3276,6 +3383,7 @@
                             .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; } 
                             .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 10px; } 
                             .kpi-card { background-color: #1d2347; border-radius: 0.5rem; padding: 1.5rem; text-align: center; border: 1px solid #334155; }
+                            .stock-trend-btn.active { outline: 2px solid #fff; outline-offset: 2px; transform: scale(1.1); }
                         </style>
                     </head>
                     <body class="bg-slate-900 text-slate-200 antialiased">
@@ -3314,7 +3422,7 @@
                                     <div class="flex gap-2 w-full sm:w-auto"><button id="viewChartBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hidden">Ver Gráficos</button><button id="viewTableBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Ver Tabela</button><button id="viewComparisonBtn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg">Ver Comparativo</button><button id="viewStockBtn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Estoque</button></div>
                                 </div>
                                 <div id="main-filters" class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
-                                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
                                         <div id="main-rede-filter-wrapper" class="relative">
                                             <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
                                             <div id="main-rede-group-container" class="inline-flex rounded-md shadow-sm" role="group">
@@ -3327,11 +3435,12 @@
                                             </div>
                                             <div id="main-rede-filter-dropdown" class="hidden absolute z-20 w-56 mt-1 top-full left-0 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
                                         </div>
-                                        <div><label for="supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Filtrar Supervisor</label><select id="supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todos</option></select></div>
-                                        <div class="relative"><label for="vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Filtrar Vendedor</label><button id="vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center"><span id="vendedor-filter-text">Todos Vendedores</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div></div>
-                                        <div><label for="codcli-filter" class="block mb-2 text-sm font-medium text-slate-300">Filtrar Cód. Cliente</label><input type="text" id="codcli-filter" placeholder="Digite o código..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"></div>
-                                        <div><label for="posicao-filter" class="block mb-2 text-sm font-medium text-slate-300">Filtrar Posição</label><select id="posicao-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todas</option><option value="L">Liberado</option><option value="M">Montado</option><option value="F">Faturado</option></select></div>
-                                        <div class="md:col-start-5"><button id="clear-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button></div>
+                                        <div><label for="supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label><select id="supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todos</option></select></div>
+                                        <div class="relative"><label for="vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label><button id="vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center"><span id="vendedor-filter-text">Todos Vendedores</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div></div>
+                                        <div><label for="fornecedor-filter" class="block mb-2 text-sm font-medium text-slate-300">Fornecedor</label><select id="fornecedor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todos</option></select></div>
+                                        <div><label for="codcli-filter" class="block mb-2 text-sm font-medium text-slate-300">Cód. Cliente</label><input type="text" id="codcli-filter" placeholder="Digite o código..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"></div>
+                                        <div><label for="posicao-filter" class="block mb-2 text-sm font-medium text-slate-300">Posição</label><select id="posicao-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todas</option><option value="L">Liberado</option><option value="M">Montado</option><option value="F">Faturado</option></select></div>
+                                        <div class="md:col-start-6"><button id="clear-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button></div>
                                     </div>
                                 </div>
                                 <main id="app-container">
@@ -3580,7 +3689,15 @@
                                 </div>
                             </div>
                             <div class="bg-[#1d2347] p-4 rounded-lg mb-6 border border-slate-700">
-                                <h2 class="text-lg font-semibold text-white text-center mb-4">Análise de Estoque e Tendência de Saída</h2>
+                                <div class="flex justify-between items-center mb-4">
+                                    <h2 class="text-lg font-semibold text-white">Análise de Estoque e Tendência de Saída</h2>
+                                    <div id="stock-trend-filter-container" class="flex items-center gap-2">
+                                        <button data-trend="all" class="stock-trend-btn active p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-gray-400"></div></button>
+                                        <button data-trend="low" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-red-500"></div></button>
+                                        <button data-trend="medium" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-yellow-500"></div></button>
+                                        <button data-trend="good" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-green-500"></div></button>
+                                    </div>
+                                </div>
                                 <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
                                     <table class="min-w-full text-sm text-left">
                                         <thead class="text-xs text-slate-300 uppercase sticky-header">
