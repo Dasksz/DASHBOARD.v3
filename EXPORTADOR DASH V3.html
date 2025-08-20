@@ -689,12 +689,20 @@
         const innovationsSelectionCoverageCountKpi = document.getElementById('innovations-selection-coverage-count-kpi');
         const innovationsMonthBtn = document.getElementById('innovations-month-btn');
 
-        // ELEMENTOS DA NOVA TELA DE INOVAÇÕES MÊS
+        // ELEMENTOS DA TELA DE INOVAÇÕES MÊS
         const innovationsMonthView = document.getElementById('innovations-month-view');
         const backToInnovationsFromMonthBtn = document.getElementById('back-to-innovations-from-month-btn');
-        const innovationsMonthChartContainer = document.getElementById('innovations-month-chart-container');
+        const innovationsMonthChartContainer = document.getElementById('innovations-month-chartContainer');
         const innovationsMonthTableBody = document.getElementById('innovations-month-table-body');
         const innovationsMonthCategoryFilter = document.getElementById('innovations-month-category-filter');
+        // Novos IDs para os filtros da tela Inovações Mês
+        const innovationsMonthSupervisorFilter = document.getElementById('innovations-month-supervisor-filter');
+        const innovationsMonthVendedorFilterBtn = document.getElementById('innovations-month-vendedor-filter-btn');
+        const innovationsMonthVendedorFilterText = document.getElementById('innovations-month-vendedor-filter-text');
+        const innovationsMonthVendedorFilterDropdown = document.getElementById('innovations-month-vendedor-filter-dropdown');
+        const innovationsMonthCityFilter = document.getElementById('innovations-month-city-filter');
+        const innovationsMonthCitySuggestions = document.getElementById('innovations-month-city-suggestions');
+        const clearInnovationsMonthFiltersBtn = document.getElementById('clear-innovations-month-filters-btn');
 
 
         const modal = document.getElementById('order-details-modal');
@@ -735,7 +743,7 @@
         let selectedStockProducts = [];
         let historicalBests = {};
         let selectedHolidays = [];
-        let stockTrendFilter = 'all'; // NOVO ESTADO PARA FILTRO DE TENDÊNCIA
+        let stockTrendFilter = 'all'; 
         
         let selectedMainRedes = [];
         let selectedCityRedes = [];
@@ -750,6 +758,7 @@
         let selectedInnovationsSellers = [];
         let selectedInnovationsSuppliers = [];
         let selectedInnovationsProducts = [];
+        let selectedInnovationsMonthSellers = []; // Novo estado para o filtro de vendedor
         
         let globalInnovationsKPI = { activeClients: 0, topProduct: { product: '-', coverage: 0 } };
         
@@ -879,7 +888,10 @@
         
         function createChart(canvasId, type, labels, chartData, optionsOverrides = {}, pluginsToRegister = []) {
             const container = document.getElementById(canvasId + 'Container');
-            if (!container) return;
+            if (!container) {
+                console.error(`Chart container not found for id: ${canvasId}Container`);
+                return;
+            }
             if (charts[canvasId]) charts[canvasId].destroy();
             
             if (pluginsToRegister.length > 0) {
@@ -2494,45 +2506,26 @@
             const sellers = selectedInnovationsSellers;
             const city = innovationsCityFilter.value.trim().toLowerCase();
 
-            // 1. Determinar o conjunto de clientes relevantes com base nos filtros
-            let relevantClientCodes = new Set(allClientsData.map(c => c['Código']));
+            let currentSales = [...allSalesData];
+            let historySales = [...allHistoryData];
+            let clients = [...allClientsData];
 
             if (supervisor) {
-                const rcasOfSupervisor = optimizedData.rcasBySupervisor.get(supervisor) || [];
-                const clientsOfSupervisor = new Set();
-                rcasOfSupervisor.forEach(rca => {
-                    (optimizedData.clientsByRca.get(rca) || []).forEach(client => clientsOfSupervisor.add(client['Código']));
-                });
-                relevantClientCodes = clientsOfSupervisor;
+                currentSales = currentSales.filter(s => s.SUPERV === supervisor);
+                historySales = historySales.filter(s => s.SUPERV === supervisor);
             }
-
             if (sellers.length > 0) {
-                const rcasOfSellers = new Set(sellers.map(name => optimizedData.rcaCodeByName.get(name)).filter(Boolean));
-                const clientsOfSellers = new Set();
-                 rcasOfSellers.forEach(rca => {
-                    (optimizedData.clientsByRca.get(rca) || []).forEach(client => clientsOfSellers.add(client['Código']));
-                });
-                
-                // Interseção com os clientes já filtrados
-                relevantClientCodes = new Set([...relevantClientCodes].filter(code => clientsOfSellers.has(code)));
+                currentSales = currentSales.filter(s => sellers.includes(s.NOME));
+                historySales = historySales.filter(s => sellers.includes(s.NOME));
             }
-            
             if (city) {
-                const clientsInCity = new Set();
-                allClientsData.forEach(c => {
-                    if (c.cidade && c.cidade.toLowerCase() === city) {
-                        clientsInCity.add(c['Código']);
-                    }
-                });
-                relevantClientCodes = new Set([...relevantClientCodes].filter(code => clientsInCity.has(code)));
+                currentSales = currentSales.filter(s => s.CIDADE && s.CIDADE.toLowerCase() === city);
+                historySales = historySales.filter(s => s.CIDADE && s.CIDADE.toLowerCase() === city);
             }
-
-            // 2. Filtrar as vendas com base nos clientes relevantes
-            const filterSalesByClients = (salesData) => salesData.filter(s => relevantClientCodes.has(s.CODCLI));
             
-            const currentSales = filterSalesByClients(allSalesData);
-            const historySales = filterSalesByClients(allHistoryData);
-            const clients = allClientsData.filter(c => relevantClientCodes.has(c['Código']));
+            const relevantClientCodes = new Set(currentSales.map(s => s.CODCLI));
+            historySales.forEach(s => relevantClientCodes.add(s.CODCLI));
+            clients = clients.filter(c => relevantClientCodes.has(c['Código']));
 
             return { currentSales, historySales, clients };
         }
@@ -2658,8 +2651,48 @@
         // || INÍCIO DAS FUNÇÕES DA PÁGINA DE INOVAÇÕES MÊS               ||
         // =================================================================
 
+        function getInnovationsMonthFilteredData() {
+            const supervisor = innovationsMonthSupervisorFilter.value;
+            const sellers = selectedInnovationsMonthSellers;
+            const city = innovationsMonthCityFilter.value.trim().toLowerCase();
+
+            let currentSales = [...allSalesData];
+            let historySales = [...allHistoryData];
+            let clients = [...allClientsData];
+
+            if (supervisor) {
+                currentSales = currentSales.filter(s => s.SUPERV === supervisor);
+                historySales = historySales.filter(s => s.SUPERV === supervisor);
+            }
+            if (sellers.length > 0) {
+                currentSales = currentSales.filter(s => sellers.includes(s.NOME));
+                historySales = historySales.filter(s => sellers.includes(s.NOME));
+            }
+            if (city) {
+                currentSales = currentSales.filter(s => s.CIDADE && s.CIDADE.toLowerCase() === city);
+                historySales = historySales.filter(s => s.CIDADE && s.CIDADE.toLowerCase() === city);
+            }
+            
+            const relevantClientCodes = new Set(currentSales.map(s => s.CODCLI));
+            historySales.forEach(s => relevantClientCodes.add(s.CODCLI));
+            clients = clients.filter(c => relevantClientCodes.has(c['Código']));
+
+            return { currentSales, historySales, clients };
+        }
+
+        function resetInnovationsMonthFilters() {
+            innovationsMonthSupervisorFilter.value = '';
+            innovationsMonthCityFilter.value = '';
+            selectedInnovationsMonthSellers = [];
+            updateSellerFilter('', innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, [], allSalesData);
+            updateInnovationsMonthView();
+        }
+
+
         function updateInnovationsMonthView() {
             const selectedCategory = innovationsMonthCategoryFilter.value;
+            
+            const { currentSales: filteredCurrentSales, historySales: filteredHistorySales, clients: filteredClients } = getInnovationsMonthFilteredData();
 
             const categories = {};
             innovationsMonthData.forEach(item => {
@@ -2683,7 +2716,7 @@
 
 
             const analysisResults = [];
-            const activeClients = allClientsData.filter(c => {
+            const activeClients = filteredClients.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
                 const rca2 = String(c.rca2 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
@@ -2705,12 +2738,12 @@
                 const productCodes = Array.from(categories[categoryName].productCodes);
 
                 const clientsWhoBoughtCurrentCategory = new Set();
-                 allSalesData.filter(s => productCodes.includes(s.PRODUTO) && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI))
+                 filteredCurrentSales.filter(s => productCodes.includes(s.PRODUTO) && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI))
                     .forEach(s => clientsWhoBoughtCurrentCategory.add(s.CODCLI));
                 const coverageCurrent = activeClientsCount > 0 ? (clientsWhoBoughtCurrentCategory.size / activeClientsCount) * 100 : 0;
 
                 const clientsWhoBoughtPreviousCategory = new Set();
-                allHistoryData.filter(s => {
+                filteredHistorySales.filter(s => {
                     const saleDate = parseDate(s.DTPED);
                     return productCodes.includes(s.PRODUTO) && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI) &&
                            saleDate?.getMonth() === previousMonth &&
@@ -2731,32 +2764,36 @@
             const chartDataCurrent = chartLabels.map(cat => categoryAnalysis[cat].coverageCurrent);
             const chartDataPrevious = chartLabels.map(cat => categoryAnalysis[cat].coveragePrevious);
 
-            createChart('innovations-month-chart', 'bar', chartLabels, [
-                { label: 'Mês Anterior', data: chartDataPrevious, backgroundColor: '#f97316' },
-                { label: 'Mês Atual', data: chartDataCurrent, backgroundColor: '#14b8a6' }
-            ], {
-                plugins: {
-                    legend: { display: true, position: 'top' },
-                    datalabels: { display: false },
-                     tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': ';
+            if (chartLabels.length > 0) {
+                createChart('innovations-month-chart', 'bar', chartLabels, [
+                    { label: 'Mês Anterior', data: chartDataPrevious, backgroundColor: '#f97316' },
+                    { label: 'Mês Atual', data: chartDataCurrent, backgroundColor: '#14b8a6' }
+                ], {
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        datalabels: { display: false },
+                         tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y.toFixed(2) + '%';
+                                    }
+                                    return label;
                                 }
-                                if (context.parsed.y !== null) {
-                                    label += context.parsed.y.toFixed(2) + '%';
-                                }
-                                return label;
                             }
                         }
+                    },
+                    scales: {
+                        y: { ticks: { callback: (v) => `${v}%` } }
                     }
-                },
-                scales: {
-                    y: { ticks: { callback: (v) => `${v}%` } }
-                }
-            });
+                });
+            } else {
+                showNoDataMessage('innovations-month-chart', 'Sem dados para exibir com os filtros atuais.');
+            }
             
             let tableHTML = '';
             const activeStockMap = getActiveStockMap('ambas');
@@ -2770,11 +2807,11 @@
                     
                     const stock = activeStockMap.get(productCode) || 0;
 
-                    const clientsCurrentSet = new Set(allSalesData.filter(s => s.PRODUTO === productCode && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI)).map(s => s.CODCLI));
+                    const clientsCurrentSet = new Set(filteredCurrentSales.filter(s => s.PRODUTO === productCode && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI)).map(s => s.CODCLI));
                     const clientsCurrentCount = clientsCurrentSet.size;
                     const coverageCurrent = activeClientsCount > 0 ? (clientsCurrentCount / activeClientsCount) * 100 : 0;
 
-                    const clientsPreviousSet = new Set(allHistoryData.filter(s => {
+                    const clientsPreviousSet = new Set(filteredHistorySales.filter(s => {
                          const saleDate = parseDate(s.DTPED);
                          return s.PRODUTO === productCode && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI) &&
                                 saleDate?.getMonth() === previousMonth &&
@@ -2789,8 +2826,10 @@
                     if (isFinite(variation)) {
                         const colorClass = variation > 0 ? 'text-green-400' : 'text-red-400';
                         variationContent = `<span class="${colorClass}">${variation.toFixed(1)}%</span>`;
-                    } else {
+                    } else if (coverageCurrent > 0) {
                         variationContent = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/30 text-purple-300">Novo</span>`;
+                    } else {
+                        variationContent = `<span>-</span>`;
                     }
 
 
@@ -3340,6 +3379,8 @@
             innovationsMonthBtn.addEventListener('click', () => {
                 innovationsView.classList.add('hidden');
                 innovationsMonthView.classList.remove('hidden');
+                populateSupervisors('innovations-month-supervisor-filter', allSalesData);
+                updateSellerFilter('', innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, [], allSalesData);
                 updateInnovationsMonthView();
             });
 
@@ -3432,11 +3473,57 @@
                     debouncedUpdateInnovations();
                 }
             });
+            
+            // --- Event Listeners da Página de Inovações Mês ---
+            const debouncedUpdateInnovationsMonth = debounce(updateInnovationsMonthView, 400);
+
+            innovationsMonthSupervisorFilter.addEventListener('change', () => {
+                selectedInnovationsMonthSellers = [];
+                updateSellerFilter(innovationsMonthSupervisorFilter.value, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, selectedInnovationsMonthSellers, allSalesData);
+                debouncedUpdateInnovationsMonth();
+            });
+
+            innovationsMonthVendedorFilterBtn.addEventListener('click', () => innovationsMonthVendedorFilterDropdown.classList.toggle('hidden'));
+            innovationsMonthVendedorFilterDropdown.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    const { value, checked } = e.target;
+                    if (checked) {
+                        if (!selectedInnovationsMonthSellers.includes(value)) selectedInnovationsMonthSellers.push(value);
+                    } else {
+                        selectedInnovationsMonthSellers = selectedInnovationsMonthSellers.filter(s => s !== value);
+                    }
+                    updateSellerFilter(innovationsMonthSupervisorFilter.value, innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, selectedInnovationsMonthSellers, allSalesData);
+                    debouncedUpdateInnovationsMonth();
+                }
+            });
+
+            innovationsMonthCityFilter.addEventListener('input', () => {
+                const cityDataSource = getInnovationsMonthFilteredData().clients;
+                updateCitySuggestions(innovationsMonthCityFilter, innovationsMonthCitySuggestions, cityDataSource);
+                debouncedUpdateInnovationsMonth();
+            });
+            innovationsMonthCityFilter.addEventListener('focus', () => {
+                const cityDataSource = getInnovationsMonthFilteredData().clients;
+                innovationsMonthCitySuggestions.classList.remove('manual-hide');
+                updateCitySuggestions(innovationsMonthCityFilter, innovationsMonthCitySuggestions, cityDataSource);
+            });
+            innovationsMonthCityFilter.addEventListener('blur', () => setTimeout(() => innovationsMonthCitySuggestions.classList.add('hidden'), 150));
+            innovationsMonthCitySuggestions.addEventListener('click', (e) => {
+                if (e.target.tagName === 'DIV') {
+                    innovationsMonthCityFilter.value = e.target.textContent;
+                    innovationsMonthCitySuggestions.classList.add('hidden');
+                    debouncedUpdateInnovationsMonth();
+                }
+            });
+
+            clearInnovationsMonthFiltersBtn.addEventListener('click', resetInnovationsMonthFilters);
+
 
             document.addEventListener('click', (e) => {
                 if (!innovationsVendedorFilterBtn.contains(e.target) && !innovationsVendedorFilterDropdown.contains(e.target)) innovationsVendedorFilterDropdown.classList.add('hidden');
                 if (!innovationsSupplierFilterBtn.contains(e.target) && !innovationsSupplierFilterDropdown.contains(e.target)) innovationsSupplierFilterDropdown.classList.add('hidden');
                 if (!innovationsProductFilterBtn.contains(e.target) && !innovationsProductFilterDropdown.contains(e.target)) innovationsProductFilterDropdown.classList.add('hidden');
+                if (!innovationsMonthVendedorFilterBtn.contains(e.target) && !innovationsMonthVendedorFilterDropdown.contains(e.target)) innovationsMonthVendedorFilterDropdown.classList.add('hidden');
             });
         }
         
@@ -3466,7 +3553,6 @@
         setupEventListeners();
         updateAllVisuals();
         renderTable(aggregatedOrders);
-        updateInnovationsMonthView(); // Initialize the new view
     </script>
 
     <script>
@@ -4053,11 +4139,36 @@
                                 <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Gráfico de Cobertura por Categoria de Inovação</p></div>
                                 <button id="back-to-innovations-from-month-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar</button>
                             </div>
+                             <!-- FILTROS PARA INOVAÇÕES MÊS -->
                             <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
-                                <label for="innovations-month-category-filter" class="block mb-2 text-sm font-medium text-slate-300">Filtrar por Categoria</label>
-                                <select id="innovations-month-category-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
-                                    <option value="">Todas as Categorias</option>
-                                </select>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                                    <div>
+                                        <label for="innovations-month-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
+                                        <select id="innovations-month-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white">
+                                            <option value="">Todos</option>
+                                        </select>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="innovations-month-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label>
+                                        <button id="innovations-month-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="innovations-month-vendedor-filter-text">Todos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="innovations-month-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="innovations-month-city-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label>
+                                        <input type="text" id="innovations-month-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white" autocomplete="off">
+                                        <div id="innovations-month-city-suggestions" class="absolute z-10 w-full bg-slate-700 border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <button id="clear-innovations-month-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+                                </div>
+                                <div class="mt-4 border-t border-slate-700 pt-4">
+                                    <label for="innovations-month-category-filter" class="block mb-2 text-sm font-medium text-slate-300">Filtrar por Categoria de Inovação</label>
+                                    <select id="innovations-month-category-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
+                                        <option value="">Todas as Categorias</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 mb-6">
                                 <div id="innovations-month-chartContainer" class="relative h-96"></div>
