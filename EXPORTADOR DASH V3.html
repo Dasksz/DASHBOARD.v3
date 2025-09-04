@@ -528,6 +528,9 @@
         let vdHiagoClients = new Set();
         let clientLastBranch = new Map();
 
+        const lastSaleDate = allSalesData.length > 0 ? new Date(Math.max.apply(null, allSalesData.map(s => parseDate(s.DTPED)).filter(d => d && !isNaN(d)))) : new Date();
+        lastSaleDate.setHours(0,0,0,0);
+
         function initializeOptimizedDataStructures() {
             optimizedData.clientsByRca = new Map();
             allClientsData.forEach(client => {
@@ -601,6 +604,33 @@
             [...allSalesData, ...allHistoryData].forEach(sale => {
                 if (sale.CODCLI && sale.FILIAL) {
                     clientLastBranch.set(sale.CODCLI, sale.FILIAL);
+                }
+            });
+            
+            // --- Otimizações para Inovações ---
+            optimizedData.salesByClient_CurrentMonth = new Map();
+            allSalesData.forEach(s => {
+                if (s.VLVENDA > 0) {
+                    if (!optimizedData.salesByClient_CurrentMonth.has(s.CODCLI)) {
+                        optimizedData.salesByClient_CurrentMonth.set(s.CODCLI, new Set());
+                    }
+                    optimizedData.salesByClient_CurrentMonth.get(s.CODCLI).add(s.PRODUTO);
+                }
+            });
+
+            const currentMonth = lastSaleDate.getMonth();
+            const currentYear = lastSaleDate.getFullYear();
+            const previousMonth = (currentMonth === 0) ? 11 : currentMonth - 1;
+            const previousMonthYear = (currentMonth === 0) ? currentYear - 1 : currentYear;
+
+            optimizedData.salesByClient_PreviousMonth = new Map();
+            allHistoryData.forEach(s => {
+                const saleDate = parseDate(s.DTPED);
+                if (s.VLVENDA > 0 && saleDate?.getMonth() === previousMonth && saleDate?.getFullYear() === previousMonthYear) {
+                    if (!optimizedData.salesByClient_PreviousMonth.has(s.CODCLI)) {
+                        optimizedData.salesByClient_PreviousMonth.set(s.CODCLI, new Set());
+                    }
+                    optimizedData.salesByClient_PreviousMonth.get(s.CODCLI).add(s.PRODUTO);
                 }
             });
         }
@@ -856,8 +886,6 @@
         let categoryLegendForExport = [];
         let chartLabels = [];
         
-        const lastSaleDate = allSalesData.length > 0 ? new Date(Math.max.apply(null, allSalesData.map(s => parseDate(s.DTPED)).filter(d => d && !isNaN(d)))) : new Date();
-        lastSaleDate.setHours(0,0,0,0);
         let calendarState = { year: lastSaleDate.getFullYear(), month: lastSaleDate.getMonth() };
         
         const getFirstName = (fullName) => (fullName || '').split(' ')[0];
@@ -1371,10 +1399,7 @@
 
             document.querySelectorAll('#stock-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
             
-            updateStockSellerFilter();
-            updateStockSupplierFilter();
-            updateStockProductFilter();
-            updateStockView();
+            handleStockFilterChange();
         }
 
 
@@ -2597,16 +2622,11 @@
             const filial = innovationsFilialFilter.value;
 
             let clients = [...allClientsData];
-            let sales = [...allSalesData];
-            let history = [...allHistoryData];
-
             if (filial !== 'ambas') {
                 clients = clients.filter(c => {
                     const lastBranch = clientLastBranch.get(c['Código']);
                     return lastBranch === filial;
                 });
-                sales = sales.filter(s => s.FILIAL === filial);
-                history = history.filter(s => s.FILIAL === filial);
             }
 
             if (supervisor) {
@@ -2625,6 +2645,13 @@
                 clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
             }
             
+            let sales = [...allSalesData];
+            let history = [...allHistoryData];
+            if (filial !== 'ambas') {
+                 sales = sales.filter(s => s.FILIAL === filial);
+                 history = history.filter(s => s.FILIAL === filial);
+            }
+
             return { sales, history, clients };
         }
 
@@ -2655,22 +2682,16 @@
         
         function updateInnovationsView() {
             const productsToAnalyze = selectedInnovationsProducts;
-            const { clients, sales, history } = getInnovationsFilteredData();
+            const { clients } = getInnovationsFilteredData();
 
             const activeClientsForCoverage = clients.filter(c => {
                 const codcli = c['Código'];
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 const isVdHiago = vdHiagoClients.has(codcli);
-
-                if (isAmericanas || isVdHiago) {
-                    return true;
-                }
-                if (rca1 === '53') {
-                    return false;
-                }
-                return true;
+                return (isAmericanas || isVdHiago || rca1 !== '53');
             });
+
             const activeClientsCount = activeClientsForCoverage.length;
             const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['Código']));
             
@@ -2697,36 +2718,47 @@
             const clientsWhoBoughtSelectionPrevious = new Set();
             let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
             
-            const currentMonth = lastSaleDate.getMonth();
-            const currentYear = lastSaleDate.getFullYear();
-            const previousMonth = (currentMonth === 0) ? 11 : currentMonth - 1;
-            const previousMonthYear = (currentMonth === 0) ? currentYear - 1 : currentYear;
-
             productsToAnalyze.forEach(productCode => {
-                const productInfo = allSalesData.find(s => s.PRODUTO === productCode) || { DESCRICAO: `Produto ${productCode}`};
+                const productInfo = allSalesData.find(s => s.PRODUTO === productCode) || allHistoryData.find(s => s.PRODUTO === productCode) || { DESCRICAO: `Produto ${productCode}`};
 
-                const clientsWhoBoughtProductCurrent = new Set(sales.filter(s => s.PRODUTO === productCode && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI)).map(s => s.CODCLI));
-                const coverageCurrent = activeClientsCount > 0 ? (clientsWhoBoughtProductCurrent.size / activeClientsCount) * 100 : 0;
-                
-                const clientsWhoBoughtProductPrevious = new Set(history.filter(s => {
-                    const saleDate = parseDate(s.DTPED);
-                    return s.PRODUTO === productCode && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI) && saleDate?.getMonth() === previousMonth && saleDate?.getFullYear() === previousMonthYear;
-                }).map(s => s.CODCLI));
-                const coveragePrevious = activeClientsCount > 0 ? (clientsWhoBoughtProductPrevious.size / activeClientsCount) * 100 : 0;
+                let clientsWhoBoughtProductCurrent = 0;
+                let clientsWhoBoughtProductPrevious = 0;
+
+                activeClientCodes.forEach(codcli => {
+                    const currentSales = optimizedData.salesByClient_CurrentMonth.get(codcli);
+                    if (currentSales && currentSales.has(productCode)) {
+                        clientsWhoBoughtProductCurrent++;
+                    }
+                    const previousSales = optimizedData.salesByClient_PreviousMonth.get(codcli);
+                    if (previousSales && previousSales.has(productCode)) {
+                         clientsWhoBoughtProductPrevious++;
+                    }
+                });
+
+                const coverageCurrent = activeClientsCount > 0 ? (clientsWhoBoughtProductCurrent / activeClientsCount) * 100 : 0;
+                const coveragePrevious = activeClientsCount > 0 ? (clientsWhoBoughtProductPrevious / activeClientsCount) * 100 : 0;
 
                 if (coverageCurrent > topCoverageItem.coverage) {
                     topCoverageItem = {
                         name: `(${productCode}) ${productInfo.DESCRICAO}`,
                         coverage: coverageCurrent,
-                        clients: clientsWhoBoughtProductCurrent.size
+                        clients: clientsWhoBoughtProductCurrent
                     };
                 }
 
+                activeClientCodes.forEach(codcli => {
+                    const currentSales = optimizedData.salesByClient_CurrentMonth.get(codcli);
+                    if (currentSales && currentSales.has(productCode)) {
+                        clientsWhoBoughtSelectionCurrent.add(codcli);
+                    }
+                    const previousSales = optimizedData.salesByClient_PreviousMonth.get(codcli);
+                    if (previousSales && previousSales.has(productCode)) {
+                         clientsWhoBoughtSelectionPrevious.add(codcli);
+                    }
+                });
+
                 const variation = coveragePrevious > 0 ? ((coverageCurrent - coveragePrevious) / coveragePrevious) * 100 : (coverageCurrent > 0 ? Infinity : 0);
                 const stockQty = getActiveStockMap(innovationsFilialFilter.value).get(productCode) || 0;
-
-                clientsWhoBoughtProductCurrent.forEach(clientCode => clientsWhoBoughtSelectionCurrent.add(clientCode));
-                clientsWhoBoughtProductPrevious.forEach(clientCode => clientsWhoBoughtSelectionPrevious.add(clientCode));
 
                 tableData.push({
                     descricao: `(${productCode}) ${productInfo.DESCRICAO}`,
@@ -2734,11 +2766,11 @@
                     coveragePrevious: coveragePrevious,
                     coverageCurrent: coverageCurrent,
                     variation: variation,
-                    clientsPreviousCount: clientsWhoBoughtProductPrevious.size,
-                    clientsCurrentCount: clientsWhoBoughtProductCurrent.size
+                    clientsPreviousCount: clientsWhoBoughtProductPrevious,
+                    clientsCurrentCount: clientsWhoBoughtProductCurrent
                 });
             });
-
+            
             innovationsTopCoverageValueKpi.textContent = `${topCoverageItem.coverage.toFixed(2)}%`;
             innovationsTopCoverageProductKpi.textContent = topCoverageItem.name;
             innovationsTopCoverageProductKpi.title = topCoverageItem.name;
@@ -2789,16 +2821,12 @@
             const filial = innovationsMonthFilialFilter.value;
 
             let clients = [...allClientsData];
-            let sales = [...allSalesData];
-            let history = [...allHistoryData];
 
             if (filial !== 'ambas') {
                 clients = clients.filter(c => {
                     const lastBranch = clientLastBranch.get(c['Código']);
                     return lastBranch === filial;
                 });
-                sales = sales.filter(s => s.FILIAL === filial);
-                history = history.filter(s => s.FILIAL === filial);
             }
 
             if (supervisor) {
@@ -2817,7 +2845,7 @@
                 clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
             }
 
-            return { sales, history, clients };
+            return { clients };
         }
 
         function resetInnovationsMonthFilters() {
@@ -2833,7 +2861,7 @@
         function updateInnovationsMonthView() {
             const selectedCategory = innovationsMonthCategoryFilter.value;
             
-            const { sales: filteredCurrentSales, history: filteredHistorySales, clients: filteredClients } = getInnovationsMonthFilteredData();
+            const { clients: filteredClients } = getInnovationsMonthFilteredData();
 
             const categories = {};
             if (innovationsMonthData && innovationsMonthData.length > 0) {
@@ -2865,22 +2893,10 @@
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
                 const isVdHiago = vdHiagoClients.has(codcli);
-
-                if (isAmericanas || isVdHiago) {
-                    return true;
-                }
-                if (rca1 === '53') {
-                    return false;
-                }
-                return true;
+                return (isAmericanas || isVdHiago || rca1 !== '53');
             });
             const activeClientsCount = activeClients.length;
             const activeClientCodes = new Set(activeClients.map(c => c['Código']));
-
-            const currentMonth = lastSaleDate.getMonth();
-            const currentYear = lastSaleDate.getFullYear();
-            const previousMonth = (currentMonth === 0) ? 11 : currentMonth - 1;
-            const previousMonthYear = (currentMonth === 0) ? currentYear - 1 : currentYear;
 
             const categoryAnalysis = {};
             let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
@@ -2891,31 +2907,30 @@
             for (const categoryName in categories) {
                  if(selectedCategory && categoryName !== selectedCategory) continue;
 
-                const productCodes = Array.from(categories[categoryName].productCodes);
+                const productCodes = categories[categoryName].productCodes;
+                let clientsCurrentCount = 0;
+                let clientsPreviousCount = 0;
 
-                const clientsWhoBoughtCurrentCategory = new Set();
-                 filteredCurrentSales.filter(s => productCodes.includes(s.PRODUTO) && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI))
-                    .forEach(s => {
-                        clientsWhoBoughtCurrentCategory.add(s.CODCLI);
-                        clientsWhoBoughtAnyVisibleProductCurrent.add(s.CODCLI);
-                    });
-                const coverageCurrent = activeClientsCount > 0 ? (clientsWhoBoughtCurrentCategory.size / activeClientsCount) * 100 : 0;
+                activeClientCodes.forEach(codcli => {
+                    const currentSales = optimizedData.salesByClient_CurrentMonth.get(codcli);
+                    if (currentSales && [...productCodes].some(p => currentSales.has(p))) {
+                        clientsCurrentCount++;
+                        clientsWhoBoughtAnyVisibleProductCurrent.add(codcli);
+                    }
+                    const previousSales = optimizedData.salesByClient_PreviousMonth.get(codcli);
+                    if (previousSales && [...productCodes].some(p => previousSales.has(p))) {
+                        clientsPreviousCount++;
+                        clientsWhoBoughtAnyVisibleProductPrevious.add(codcli);
+                    }
+                });
+                
+                const coverageCurrent = activeClientsCount > 0 ? (clientsCurrentCount / activeClientsCount) * 100 : 0;
 
                 if (!selectedCategory && coverageCurrent > topCoverageItem.coverage) {
-                    topCoverageItem = { name: categoryName, coverage: coverageCurrent, clients: clientsWhoBoughtCurrentCategory.size };
+                    topCoverageItem = { name: categoryName, coverage: coverageCurrent, clients: clientsCurrentCount };
                 }
 
-                const clientsWhoBoughtPreviousCategory = new Set();
-                filteredHistorySales.filter(s => {
-                    const saleDate = parseDate(s.DTPED);
-                    return productCodes.includes(s.PRODUTO) && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI) &&
-                           saleDate?.getMonth() === previousMonth &&
-                           saleDate?.getFullYear() === previousMonthYear;
-                }).forEach(s => {
-                    clientsWhoBoughtPreviousCategory.add(s.CODCLI);
-                    clientsWhoBoughtAnyVisibleProductPrevious.add(s.CODCLI);
-                });
-                const coveragePrevious = activeClientsCount > 0 ? (clientsWhoBoughtPreviousCategory.size / activeClientsCount) * 100 : 0;
+                const coveragePrevious = activeClientsCount > 0 ? (clientsPreviousCount / activeClientsCount) * 100 : 0;
                 
                 const variation = coveragePrevious > 0 ? ((coverageCurrent - coveragePrevious) / coveragePrevious) * 100 : (coverageCurrent > 0 ? Infinity : 0);
 
@@ -2923,7 +2938,7 @@
                     coverageCurrent,
                     coveragePrevious,
                     variation,
-                    clientsCount: clientsWhoBoughtCurrentCategory.size
+                    clientsCount: clientsCurrentCount
                 };
             }
 
@@ -2933,15 +2948,17 @@
 
                 productsInCategory.forEach(product => {
                     const productCode = product.Codigo;
-                    const clientsWhoBoughtProduct = new Set(
-                        filteredCurrentSales
-                        .filter(s => s.PRODUTO === productCode && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI))
-                        .map(s => s.CODCLI)
-                    );
+                    let clientsWhoBoughtProduct = 0;
+                    activeClientCodes.forEach(codcli => {
+                        const currentSales = optimizedData.salesByClient_CurrentMonth.get(codcli);
+                        if (currentSales && currentSales.has(productCode)) {
+                             clientsWhoBoughtProduct++;
+                        }
+                    });
                     
-                    const coverage = activeClientsCount > 0 ? (clientsWhoBoughtProduct.size / activeClientsCount) * 100 : 0;
+                    const coverage = activeClientsCount > 0 ? (clientsWhoBoughtProduct / activeClientsCount) * 100 : 0;
                     if (coverage > topCoverageItem.coverage) {
-                        topCoverageItem = { name: `(${productCode}) ${product.Produto}`, coverage: coverage, clients: clientsWhoBoughtProduct.size };
+                        topCoverageItem = { name: `(${productCode}) ${product.Produto}`, coverage: coverage, clients: clientsWhoBoughtProduct };
                     }
                 });
             }
@@ -3010,18 +3027,18 @@
                     const productName = product.Produto;
                     
                     const stock = activeStockMap.get(productCode) || 0;
+                    
+                    let clientsCurrentCount = 0;
+                    let clientsPreviousCount = 0;
 
-                    const clientsCurrentSet = new Set(filteredCurrentSales.filter(s => s.PRODUTO === productCode && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI)).map(s => s.CODCLI));
-                    const clientsCurrentCount = clientsCurrentSet.size;
+                    activeClientCodes.forEach(codcli => {
+                         const currentSales = optimizedData.salesByClient_CurrentMonth.get(codcli);
+                         if(currentSales && currentSales.has(productCode)) clientsCurrentCount++;
+                         const previousSales = optimizedData.salesByClient_PreviousMonth.get(codcli);
+                         if(previousSales && previousSales.has(productCode)) clientsPreviousCount++;
+                    });
+                    
                     const coverageCurrent = activeClientsCount > 0 ? (clientsCurrentCount / activeClientsCount) * 100 : 0;
-
-                    const clientsPreviousSet = new Set(filteredHistorySales.filter(s => {
-                         const saleDate = parseDate(s.DTPED);
-                         return s.PRODUTO === productCode && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI) &&
-                                saleDate?.getMonth() === previousMonth &&
-                                saleDate?.getFullYear() === previousMonthYear;
-                    }).map(s => s.CODCLI));
-                    const clientsPreviousCount = clientsPreviousSet.size;
                     const coveragePrevious = activeClientsCount > 0 ? (clientsPreviousCount / activeClientsCount) * 100 : 0;
                     
                     const variation = coveragePrevious > 0 ? ((coverageCurrent - coveragePrevious) / coveragePrevious) * 100 : (coverageCurrent > 0 ? Infinity : 0);
@@ -3071,7 +3088,6 @@
                 `;
             }).join('');
             
-            // Lógica para a nova tabela "Inovações por cliente"
             const innovationsByClientTableHead = document.getElementById('innovations-by-client-table-head');
             const innovationsByClientTableBody = document.getElementById('innovations-by-client-table-body');
             const innovationsByClientLegend = document.getElementById('innovations-by-client-legend');
@@ -3095,13 +3111,11 @@
             innovationsByClientTableHead.innerHTML = tableHeadHTML;
 
             const clientInnovationStatus = activeClients.map(client => {
+                const clientBoughtProducts = optimizedData.salesByClient_CurrentMonth.get(client['Código']) || new Set();
                 const status = {};
                 categoryNames.forEach(catName => {
                     const productCodes = categories[catName].productCodes;
-                    const hasBought = filteredCurrentSales.some(s => 
-                        s.CODCLI === client['Código'] && productCodes.has(s.PRODUTO) && s.VLVENDA > 0
-                    );
-                    status[catName] = hasBought;
+                    status[catName] = [...productCodes].some(p => clientBoughtProducts.has(p));
                 });
                 return { ...client, innovationStatus: status };
             });
@@ -3213,7 +3227,6 @@
                 }
             });
 
-            // Adiciona a nova tabela de Inovações por Cliente
             if (innovationsByClientForExport.length > 0) {
                 doc.addPage();
                 doc.setFontSize(18);
@@ -4701,3 +4714,4 @@
     </script>
 </body>
 </html>
+
