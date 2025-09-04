@@ -525,6 +525,8 @@
         const clientsWithSalesThisMonth = new Set(allSalesData.map(s => s.CODCLI));
 
         const optimizedData = {};
+        let vdHiagoClients = new Set();
+        let clientLastBranch = new Map();
 
         function initializeOptimizedDataStructures() {
             optimizedData.clientsByRca = new Map();
@@ -594,6 +596,13 @@
             };
             allSalesData.forEach(populateRcaCodeMap);
             allHistoryData.forEach(populateRcaCodeMap);
+            vdHiagoClients = new Set(allSalesData.filter(s => s.NOME === 'VD HIAGO').map(s => s.CODCLI));
+
+            [...allSalesData, ...allHistoryData].forEach(sale => {
+                if (sale.CODCLI && sale.FILIAL) {
+                    clientLastBranch.set(sale.CODCLI, sale.FILIAL);
+                }
+            });
         }
 
         aggregatedOrders.sort((a, b) => {
@@ -781,6 +790,7 @@
         const innovationsMonthSelectionCoverageCountKpi = document.getElementById('innovations-month-selection-coverage-count-kpi');
         const innovationsMonthSelectionCoverageValueKpiPrevious = document.getElementById('innovations-month-selection-coverage-value-kpi-previous');
         const innovationsMonthSelectionCoverageCountKpiPrevious = document.getElementById('innovations-month-selection-coverage-count-kpi-previous');
+        const exportInnovationsMonthPdfBtn = document.getElementById('export-innovations-month-pdf-btn');
 
 
         const modal = document.getElementById('order-details-modal');
@@ -839,6 +849,12 @@
         let selectedInnovationsMonthSellers = [];
         
         let globalInnovationsKPI = { activeClients: 0, topProduct: { product: '-', coverage: 0, clients: 0 } };
+        
+        // Adiciona variáveis globais para exportação de dados das novas tabelas
+        let innovationsMonthTableDataForExport = [];
+        let innovationsByClientForExport = [];
+        let categoryLegendForExport = [];
+        let chartLabels = [];
         
         const lastSaleDate = allSalesData.length > 0 ? new Date(Math.max.apply(null, allSalesData.map(s => parseDate(s.DTPED)).filter(d => d && !isNaN(d)))) : new Date();
         lastSaleDate.setHours(0,0,0,0);
@@ -1852,25 +1868,30 @@
 
 
         function updateAllComparisonFilters() {
-            const supervisorOptionsData = getComparisonFilteredData({ excludeFilter: 'supervisor' }).historySales;
+            const { currentSales: supervisorCurrent, historySales: supervisorHistory } = getComparisonFilteredData({ excludeFilter: 'supervisor' });
+            const supervisorOptionsData = [...supervisorCurrent, ...supervisorHistory];
             const currentSupervisor = comparisonSupervisorFilter.value;
             populateSupervisors('comparison-supervisor-filter', supervisorOptionsData);
             if ([...comparisonSupervisorFilter.options].some(o => o.value === currentSupervisor)) {
                 comparisonSupervisorFilter.value = currentSupervisor;
             }
 
-            const sellerOptionsData = getComparisonFilteredData({ excludeFilter: 'seller' }).historySales;
+            const { currentSales: sellerCurrent, historySales: sellerHistory } = getComparisonFilteredData({ excludeFilter: 'seller' });
+            const sellerOptionsData = [...sellerCurrent, ...sellerHistory];
             selectedComparisonSellers = updateSellerFilter(comparisonSupervisorFilter.value, comparisonVendedorFilterDropdown, comparisonVendedorFilterText, selectedComparisonSellers, sellerOptionsData);
-
-            const supplierOptionsData = getComparisonFilteredData({ excludeFilter: 'supplier' }).historySales;
+            
+            const { currentSales: supplierCurrent, historySales: supplierHistory } = getComparisonFilteredData({ excludeFilter: 'supplier' });
+            const supplierOptionsData = [...supplierCurrent, ...supplierHistory];
             selectedComparisonSuppliers = updateSupplierFilter(comparisonSupplierFilterDropdown, comparisonSupplierFilterText, selectedComparisonSuppliers, supplierOptionsData, 'comparison');
             
             updateComparisonProductFilter();
 
-            const cityOptionsData = getComparisonFilteredData({ excludeFilter: 'city' }).historySales;
+            const { currentSales: cityCurrent, historySales: cityHistory } = getComparisonFilteredData({ excludeFilter: 'city' });
+            const cityOptionsData = [...cityCurrent, ...cityHistory];
             updateComparisonCitySuggestions(cityOptionsData);
 
-            const pastaOptionsData = getComparisonFilteredData({ excludeFilter: 'pasta' }).historySales;
+            const { currentSales: pastaCurrent, historySales: pastaHistory } = getComparisonFilteredData({ excludeFilter: 'pasta' });
+            const pastaOptionsData = [...pastaCurrent, ...pastaHistory];
             const pepsicoBtn = document.querySelector('#comparison-fornecedor-toggle-container button[data-fornecedor="PEPSICO"]');
             const multimarcasBtn = document.querySelector('#comparison-fornecedor-toggle-container button[data-fornecedor="MULTIMARCAS"]');
             const hasPepsico = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'PEPSICO');
@@ -1915,19 +1936,23 @@
         }
         
         function updateComparisonProductFilter() {
-             updateProductFilter(comparisonProductFilterDropdown, comparisonProductFilterText, selectedComparisonProducts, getComparisonFilteredData({ excludeFilter: 'product' }).historySales, 'comparison');
+            const { currentSales, historySales } = getComparisonFilteredData({ excludeFilter: 'product' });
+            updateProductFilter(comparisonProductFilterDropdown, comparisonProductFilterText, selectedComparisonProducts, [...currentSales, ...historySales], 'comparison');
         }
         
         function updateStockProductFilter() {
-             updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, getStockFilteredData({excludeFilter: 'product'}).sales, 'stock');
+            const data = getStockFilteredData({excludeFilter: 'product'});
+            updateProductFilter(stockProductFilterDropdown, stockProductFilterText, selectedStockProducts, [...data.sales, ...data.history], 'stock');
         }
 
         function updateStockSupplierFilter() {
-            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, getStockFilteredData({excludeFilter: 'supplier'}).sales, 'stock');
+            const data = getStockFilteredData({excludeFilter: 'supplier'});
+            selectedStockSuppliers = updateSupplierFilter(stockSupplierFilterDropdown, stockSupplierFilterText, selectedStockSuppliers, [...data.sales, ...data.history], 'stock');
         }
         
         function updateStockSellerFilter() {
-            selectedStockSellers = updateSellerFilter(stockSupervisorFilter.value, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, getStockFilteredData({excludeFilter: 'seller'}).sales);
+            const data = getStockFilteredData({excludeFilter: 'seller'});
+            selectedStockSellers = updateSellerFilter(stockSupervisorFilter.value, stockVendedorFilterDropdown, stockVendedorFilterText, selectedStockSellers, [...data.sales, ...data.history]);
         }
 
         function updateStockCitySuggestions(dataSource) {
@@ -1941,7 +1966,6 @@
                 stockCitySuggestions.classList.add('hidden');
             }
         }
-
 
         function getActiveStockMap(filial) {
             const filterValue = filial || stockFilialFilter.value;
@@ -1996,6 +2020,32 @@
                 sales: allSalesData.filter(filterFunction),
                 history: allHistoryData.filter(filterFunction)
             };
+        }
+        
+        function handleStockFilterChange() {
+            const supervisorData = getStockFilteredData({ excludeFilter: 'supervisor' });
+            const supervisorOptionsData = [...supervisorData.sales, ...supervisorData.history];
+            populateSupervisors('stock-supervisor-filter', supervisorOptionsData);
+            
+            updateStockSellerFilter();
+            updateStockSupplierFilter();
+            updateStockProductFilter();
+            
+            const cityData = getStockFilteredData({ excludeFilter: 'city' });
+            updateStockCitySuggestions([...cityData.sales, ...cityData.history]);
+
+            const pastaData = getStockFilteredData({ excludeFilter: 'pasta' });
+            const pastaOptionsData = [...pastaData.sales, ...pastaData.history];
+            const pepsicoBtn = document.querySelector('#stock-fornecedor-toggle-container button[data-fornecedor="PEPSICO"]');
+            const multimarcasBtn = document.querySelector('#stock-fornecedor-toggle-container button[data-fornecedor="MULTIMARCAS"]');
+            const hasPepsico = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'PEPSICO');
+            const hasMultimarcas = pastaOptionsData.some(s => s.OBSERVACAOFOR === 'MULTIMARCAS');
+            pepsicoBtn.disabled = !hasPepsico;
+            multimarcasBtn.disabled = !hasMultimarcas;
+            pepsicoBtn.classList.toggle('opacity-50', !hasPepsico);
+            multimarcasBtn.classList.toggle('opacity-50', !hasMultimarcas);
+            
+            updateStockView();
         }
 
         function updateComparisonView() {
@@ -2421,7 +2471,6 @@
                 const productHistorySales = filteredHistory.filter(s => s.PRODUTO === product.code);
                 const totalHistoryQty = productHistorySales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
                 
-                // MODIFICAÇÃO AQUI: Calcula a média de forma dinâmica
                 const historyMonthsCountForProduct = getUniqueMonthCount(productHistorySales);
                 const monthlyAvgSale = totalHistoryQty / historyMonthsCountForProduct; 
 
@@ -2547,38 +2596,41 @@
             const city = innovationsCityFilter.value.trim().toLowerCase();
             const filial = innovationsFilialFilter.value;
 
-            let currentSales = [...allSalesData];
-            let historySales = [...allHistoryData];
             let clients = [...allClientsData];
+            let sales = [...allSalesData];
+            let history = [...allHistoryData];
 
             if (filial !== 'ambas') {
-                currentSales = currentSales.filter(s => s.FILIAL === filial);
-                historySales = historySales.filter(s => s.FILIAL === filial);
+                clients = clients.filter(c => {
+                    const lastBranch = clientLastBranch.get(c['Código']);
+                    return lastBranch === filial;
+                });
+                sales = sales.filter(s => s.FILIAL === filial);
+                history = history.filter(s => s.FILIAL === filial);
             }
 
             if (supervisor) {
-                currentSales = currentSales.filter(s => s.SUPERV === supervisor);
-                historySales = historySales.filter(s => s.SUPERV === supervisor);
+                const rcasOfSupervisor = new Set(optimizedData.rcasBySupervisor.get(supervisor) || []);
+                clients = clients.filter(c => c.rcas.some(rca => rcasOfSupervisor.has(rca)));
             }
             if (sellers.length > 0) {
-                currentSales = currentSales.filter(s => sellers.includes(s.NOME));
-                historySales = historySales.filter(s => sellers.includes(s.NOME));
+                const rcasOfSellers = new Set();
+                sellers.forEach(sellerName => {
+                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
+                    if (rcaCode) rcasOfSellers.add(rcaCode);
+                });
+                clients = clients.filter(c => c.rcas.some(rca => rcasOfSellers.has(rca)));
             }
             if (city) {
-                currentSales = currentSales.filter(s => s.CIDADE && s.CIDADE.toLowerCase() === city);
-                historySales = historySales.filter(s => s.CIDADE && s.CIDADE.toLowerCase() === city);
+                clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
             }
             
-            const relevantClientCodes = new Set(currentSales.map(s => s.CODCLI));
-            historySales.forEach(s => relevantClientCodes.add(s.CODCLI));
-            clients = allClientsData.filter(c => relevantClientCodes.has(c['Código']));
-
-            return { currentSales, historySales, clients };
+            return { sales, history, clients };
         }
 
         function updateInnovationsFilters() {
-            const filteredData = getInnovationsFilteredData();
-            let productSource = [...filteredData.currentSales, ...filteredData.historySales];
+            const { sales, history } = getInnovationsFilteredData();
+            let productSource = [...sales, ...history];
 
             if (selectedInnovationsSuppliers.length > 0) {
                  productSource = productSource.filter(s => selectedInnovationsSuppliers.includes(String(s.CODFOR)));
@@ -2603,13 +2655,21 @@
         
         function updateInnovationsView() {
             const productsToAnalyze = selectedInnovationsProducts;
-            const { clients, currentSales, historySales } = getInnovationsFilteredData();
+            const { clients, sales, history } = getInnovationsFilteredData();
 
             const activeClientsForCoverage = clients.filter(c => {
+                const codcli = c['Código'];
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                const hasSaleThisMonth = clientsWithSalesThisMonth.has(c['Código']);
-                return (rca1 !== '53') || isAmericanas || hasSaleThisMonth;
+                const isVdHiago = vdHiagoClients.has(codcli);
+
+                if (isAmericanas || isVdHiago) {
+                    return true;
+                }
+                if (rca1 === '53') {
+                    return false;
+                }
+                return true;
             });
             const activeClientsCount = activeClientsForCoverage.length;
             const activeClientCodes = new Set(activeClientsForCoverage.map(c => c['Código']));
@@ -2645,10 +2705,10 @@
             productsToAnalyze.forEach(productCode => {
                 const productInfo = allSalesData.find(s => s.PRODUTO === productCode) || { DESCRICAO: `Produto ${productCode}`};
 
-                const clientsWhoBoughtProductCurrent = new Set(currentSales.filter(s => s.PRODUTO === productCode && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI)).map(s => s.CODCLI));
+                const clientsWhoBoughtProductCurrent = new Set(sales.filter(s => s.PRODUTO === productCode && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI)).map(s => s.CODCLI));
                 const coverageCurrent = activeClientsCount > 0 ? (clientsWhoBoughtProductCurrent.size / activeClientsCount) * 100 : 0;
                 
-                const clientsWhoBoughtProductPrevious = new Set(historySales.filter(s => {
+                const clientsWhoBoughtProductPrevious = new Set(history.filter(s => {
                     const saleDate = parseDate(s.DTPED);
                     return s.PRODUTO === productCode && s.VLVENDA > 0 && activeClientCodes.has(s.CODCLI) && saleDate?.getMonth() === previousMonth && saleDate?.getFullYear() === previousMonthYear;
                 }).map(s => s.CODCLI));
@@ -2728,30 +2788,36 @@
             const city = innovationsMonthCityFilter.value.trim().toLowerCase();
             const filial = innovationsMonthFilialFilter.value;
 
-            let currentSales = [...allSalesData];
-            let historySales = [...allHistoryData];
+            let clients = [...allClientsData];
+            let sales = [...allSalesData];
+            let history = [...allHistoryData];
 
             if (filial !== 'ambas') {
-                currentSales = currentSales.filter(s => s.FILIAL === filial);
-                historySales = historySales.filter(s => s.FILIAL === filial);
+                clients = clients.filter(c => {
+                    const lastBranch = clientLastBranch.get(c['Código']);
+                    return lastBranch === filial;
+                });
+                sales = sales.filter(s => s.FILIAL === filial);
+                history = history.filter(s => s.FILIAL === filial);
             }
+
             if (supervisor) {
-                currentSales = currentSales.filter(s => s.SUPERV === supervisor);
-                historySales = historySales.filter(s => s.SUPERV === supervisor);
+                const rcasOfSupervisor = new Set(optimizedData.rcasBySupervisor.get(supervisor) || []);
+                clients = clients.filter(c => c.rcas.some(rca => rcasOfSupervisor.has(rca)));
             }
             if (sellers.length > 0) {
-                currentSales = currentSales.filter(s => sellers.includes(s.NOME));
-                historySales = historySales.filter(s => sellers.includes(s.NOME));
+                const rcasOfSellers = new Set();
+                 sellers.forEach(sellerName => {
+                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
+                    if (rcaCode) rcasOfSellers.add(rcaCode);
+                });
+                clients = clients.filter(c => c.rcas.some(rca => rcasOfSellers.has(rca)));
             }
             if (city) {
-                currentSales = currentSales.filter(s => s.CIDADE && s.CIDADE.toLowerCase() === city);
-                historySales = historySales.filter(s => s.CIDADE && s.CIDADE.toLowerCase() === city);
+                clients = clients.filter(c => c.cidade && c.cidade.toLowerCase() === city);
             }
-            
-            const relevantClientCodes = new Set([...currentSales.map(s => s.CODCLI), ...historySales.map(s => s.CODCLI)]);
-            const clients = allClientsData.filter(c => relevantClientCodes.has(c['Código']));
 
-            return { currentSales, historySales, clients };
+            return { sales, history, clients };
         }
 
         function resetInnovationsMonthFilters() {
@@ -2767,7 +2833,7 @@
         function updateInnovationsMonthView() {
             const selectedCategory = innovationsMonthCategoryFilter.value;
             
-            const { currentSales: filteredCurrentSales, historySales: filteredHistorySales, clients: filteredClients } = getInnovationsMonthFilteredData();
+            const { sales: filteredCurrentSales, history: filteredHistorySales, clients: filteredClients } = getInnovationsMonthFilteredData();
 
             const categories = {};
             if (innovationsMonthData && innovationsMonthData.length > 0) {
@@ -2795,10 +2861,18 @@
 
 
             const activeClients = filteredClients.filter(c => {
+                const codcli = c['Código'];
                 const rca1 = String(c.rca1 || '').trim();
                 const isAmericanas = (c.razaoSocial || '').toUpperCase().includes('AMERICANAS');
-                const hasSaleThisMonth = clientsWithSalesThisMonth.has(c['Código']);
-                return (rca1 !== '53') || isAmericanas || hasSaleThisMonth;
+                const isVdHiago = vdHiagoClients.has(codcli);
+
+                if (isAmericanas || isVdHiago) {
+                    return true;
+                }
+                if (rca1 === '53') {
+                    return false;
+                }
+                return true;
             });
             const activeClientsCount = activeClients.length;
             const activeClientCodes = new Set(activeClients.map(c => c['Código']));
@@ -2813,7 +2887,7 @@
             
             const clientsWhoBoughtAnyVisibleProductCurrent = new Set();
             const clientsWhoBoughtAnyVisibleProductPrevious = new Set();
-
+            
             for (const categoryName in categories) {
                  if(selectedCategory && categoryName !== selectedCategory) continue;
 
@@ -2877,34 +2951,25 @@
             const selectionCoveredCountPrevious = clientsWhoBoughtAnyVisibleProductPrevious.size;
             const selectionCoveragePercentPrevious = activeClientsCount > 0 ? (selectionCoveredCountPrevious / activeClientsCount) * 100 : 0;
             
-            // Update KPIs
             innovationsMonthActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
-            
-            // Reestruturação do KPI "Item com Maior Cobertura"
             innovationsMonthTopCoverageValueKpi.textContent = `${topCoverageItem.coverage.toFixed(2)}%`;
             innovationsMonthTopCoverageKpi.textContent = topCoverageItem.name;
             innovationsMonthTopCoverageKpi.title = topCoverageItem.name;
             innovationsMonthTopCoverageCountKpi.textContent = `${topCoverageItem.clients.toLocaleString('pt-BR')} PDVs`;
             document.getElementById('innovations-month-top-coverage-title').textContent = selectedCategory ? 'Produto com Maior Cobertura' : 'Categoria com Maior Cobertura';
-
-
-            // KPI de Cobertura Atual (cor Ciano)
             innovationsMonthSelectionCoverageValueKpi.textContent = `${selectionCoveragePercentCurrent.toFixed(2)}%`;
             innovationsMonthSelectionCoverageCountKpi.textContent = `${selectionCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-            
-            // Novo KPI de Cobertura Anterior (cor Laranja)
             innovationsMonthSelectionCoverageValueKpiPrevious.textContent = `${selectionCoveragePercentPrevious.toFixed(2)}%`;
             innovationsMonthSelectionCoverageCountKpiPrevious.textContent = `${selectionCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
 
-
-            const chartLabels = Object.keys(categoryAnalysis).sort((a,b) => categoryAnalysis[b].coverageCurrent - categoryAnalysis[a].coverageCurrent);
+            chartLabels = Object.keys(categoryAnalysis).sort((a,b) => categoryAnalysis[b].coverageCurrent - categoryAnalysis[a].coverageCurrent);
             const chartDataCurrent = chartLabels.map(cat => categoryAnalysis[cat].coverageCurrent);
             const chartDataPrevious = chartLabels.map(cat => categoryAnalysis[cat].coveragePrevious);
 
             if (chartLabels.length > 0) {
                 createChart('innovations-month-chart', 'bar', chartLabels, [
-                    { label: 'Mês Anterior', data: chartDataPrevious, backgroundColor: '#f97316' }, // Laranja
-                    { label: 'Mês Atual', data: chartDataCurrent, backgroundColor: '#06b6d4' } // Ciano
+                    { label: 'Mês Anterior', data: chartDataPrevious, backgroundColor: '#f97316' },
+                    { label: 'Mês Atual', data: chartDataCurrent, backgroundColor: '#06b6d4' }
                 ], {
                     plugins: {
                         legend: { display: true, position: 'top' },
@@ -2914,9 +2979,7 @@
                             offset: 8,
                             formatter: (value) => value > 0 ? value.toFixed(1) + '%' : '',
                             color: '#cbd5e1',
-                            font: {
-                                size: 10
-                            }
+                            font: { size: 10 }
                         },
                          tooltip: {
                             callbacks: {
@@ -2929,23 +2992,16 @@
                             }
                         }
                     },
-                    scales: {
-                        y: { ticks: { callback: (v) => `${v}%` } }
-                    },
-                    layout: {
-                        padding: {
-                            top: 20 
-                        }
-                    }
+                    scales: { y: { ticks: { callback: (v) => `${v}%` } } },
+                    layout: { padding: { top: 20 } }
                 });
             } else {
                 showNoDataMessage('innovations-month-chart', 'Sem dados de inovações para exibir com os filtros atuais.');
             }
             
-            let tableHTML = '';
+            const tableData = [];
             const activeStockMap = getActiveStockMap(innovationsMonthFilialFilter.value);
 
-            const tableData = [];
             chartLabels.forEach(categoryName => {
                 const categoryData = categories[categoryName];
                 
@@ -2985,6 +3041,8 @@
             });
 
             tableData.sort((a,b) => b.coverageCurrent - a.coverageCurrent);
+            
+            innovationsMonthTableDataForExport = tableData;
 
             innovationsMonthTableBody.innerHTML = tableData.map(item => {
                 let variationContent;
@@ -3012,6 +3070,207 @@
                     </tr>
                 `;
             }).join('');
+            
+            // Lógica para a nova tabela "Inovações por cliente"
+            const innovationsByClientTableHead = document.getElementById('innovations-by-client-table-head');
+            const innovationsByClientTableBody = document.getElementById('innovations-by-client-table-body');
+            const innovationsByClientLegend = document.getElementById('innovations-by-client-legend');
+            
+            const categoryNames = Object.keys(categories).sort();
+            categoryLegendForExport = categoryNames.map((name, index) => `${index + 1} - ${name}`);
+            innovationsByClientLegend.innerHTML = `<strong>Legenda:</strong> ${categoryLegendForExport.join('; ')}`;
+
+            let tableHeadHTML = `
+                <tr>
+                    <th class="px-2 py-2 text-left">Código</th>
+                    <th class="px-2 py-2 text-left">Cliente</th>
+                    <th class="px-2 py-2 text-left">Cidade</th>
+                    <th class="px-2 py-2 text-left">Bairro</th>
+                    <th class="px-2 py-2 text-center">Últ. Compra</th>
+            `;
+            categoryNames.forEach((name, index) => {
+                tableHeadHTML += `<th class="px-2 py-2 text-center">${index + 1}</th>`;
+            });
+            tableHeadHTML += `</tr>`;
+            innovationsByClientTableHead.innerHTML = tableHeadHTML;
+
+            const clientInnovationStatus = activeClients.map(client => {
+                const status = {};
+                categoryNames.forEach(catName => {
+                    const productCodes = categories[catName].productCodes;
+                    const hasBought = filteredCurrentSales.some(s => 
+                        s.CODCLI === client['Código'] && productCodes.has(s.PRODUTO) && s.VLVENDA > 0
+                    );
+                    status[catName] = hasBought;
+                });
+                return { ...client, innovationStatus: status };
+            });
+
+            clientInnovationStatus.sort((a, b) => {
+                const cidadeA = a.cidade || '';
+                const cidadeB = b.cidade || '';
+                const bairroA = a.bairro || '';
+                const bairroB = b.bairro || '';
+                if (cidadeA.localeCompare(cidadeB) !== 0) {
+                    return cidadeA.localeCompare(cidadeB);
+                }
+                return bairroA.localeCompare(bairroB);
+            });
+            
+            innovationsByClientForExport = clientInnovationStatus;
+
+            let tableBodyHTML = '';
+            const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-400 mx-auto" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>`;
+            const xIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-400 mx-auto" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>`;
+
+            clientInnovationStatus.forEach(client => {
+                tableBodyHTML += `
+                    <tr class="hover:bg-slate-700/50">
+                        <td class="px-2 py-1.5 text-xs">${client['Código']}</td>
+                        <td class="px-2 py-1.5 text-xs">${client.fantasia || client.razaoSocial}</td>
+                        <td class="px-2 py-1.5 text-xs">${client.cidade}</td>
+                        <td class="px-2 py-1.5 text-xs">${client.bairro}</td>
+                        <td class="px-2 py-1.5 text-xs text-center">${formatDate(client.ultimaCompra)}</td>
+                `;
+                categoryNames.forEach(catName => {
+                    tableBodyHTML += `<td class="px-2 py-1.5 text-center">${client.innovationStatus[catName] ? checkIcon : xIcon}</td>`;
+                });
+                tableBodyHTML += `</tr>`;
+            });
+            innovationsByClientTableBody.innerHTML = tableBodyHTML;
+        }
+        
+        async function exportInnovationsMonthPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape');
+
+            const supervisor = innovationsMonthSupervisorFilter.value || 'Todos';
+            const vendedor = selectedInnovationsMonthSellers.length > 0 ? selectedInnovationsMonthSellers.join(', ') : 'Todos';
+            const filial = innovationsMonthFilialFilter.options[innovationsMonthFilialFilter.selectedIndex].text;
+            const cidade = innovationsMonthCityFilter.value || 'Todas';
+            const categoria = innovationsMonthCategoryFilter.value || 'Todas';
+            const generationDate = new Date().toLocaleString('pt-BR');
+
+            doc.setFontSize(18);
+            doc.text('Relatório de Inovações do Mês', 14, 22);
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
+            
+            let filterText = `Filtros Aplicados: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Filial: ${filial} | Cidade: ${cidade} | Categoria: ${categoria}`;
+            const splitFilters = doc.splitTextToSize(filterText, 270);
+            doc.text(splitFilters, 14, 36);
+
+            const chartCanvas = document.getElementById('innovations-month-chart');
+            if (chartCanvas && charts['innovations-month-chart'] && chartLabels.length > 0) {
+                try {
+                    const chartImage = chartCanvas.toDataURL('image/png', 1.0);
+                    doc.addImage(chartImage, 'PNG', 14, 50, 270, 100);
+                } catch (e) {
+                    console.error("Erro ao converter o gráfico para imagem:", e);
+                    doc.text("Erro ao gerar a imagem do gráfico.", 14, 50);
+                }
+            } else {
+                 doc.text("Gráfico não disponível para os filtros selecionados.", 14, 50);
+            }
+
+            const head = [['Categoria', 'Produto', 'Estoque', 'Cob. Mês Ant.', 'Cob. Mês Atual', 'Variação']];
+            const body = [];
+            
+            innovationsMonthTableDataForExport.forEach(item => {
+                let variationContent;
+                if (isFinite(item.variation)) {
+                    variationContent = `${item.variation.toFixed(1)}%`;
+                } else if (item.coverageCurrent > 0) {
+                    variationContent = 'Novo';
+                } else {
+                    variationContent = '-';
+                }
+
+                const row = [
+                    item.categoryName,
+                    `${item.productCode} - ${item.productName}`,
+                    item.stock.toLocaleString('pt-BR'),
+                    `${item.coveragePrevious.toFixed(2)}% (${item.clientsPreviousCount} PDVs)`,
+                    `${item.coverageCurrent.toFixed(2)}% (${item.clientsCurrentCount} PDVs)`,
+                    variationContent
+                ];
+                body.push(row);
+            });
+
+            doc.autoTable({
+                head: head,
+                body: body,
+                startY: 155,
+                theme: 'grid',
+                styles: { fontSize: 7, cellPadding: 1.5 },
+                headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 7, fontStyle: 'bold' },
+                alternateRowStyles: { fillColor: [240, 248, 255] },
+                didDrawPage: function (data) {
+                    doc.setFontSize(12);
+                    doc.setTextColor(40);
+                    doc.text("Dados do Gráfico", data.settings.margin.left, 152);
+                }
+            });
+
+            // Adiciona a nova tabela de Inovações por Cliente
+            if (innovationsByClientForExport.length > 0) {
+                doc.addPage();
+                doc.setFontSize(18);
+                doc.text('Relatório de Inovações por Cliente', 14, 22);
+                doc.setFontSize(10);
+                doc.setTextColor(100);
+                doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
+                doc.text(splitFilters, 14, 36);
+                
+                const legendText = `Legenda: ${categoryLegendForExport.join('; ')}`;
+                const splitLegend = doc.splitTextToSize(legendText, 270);
+                doc.text(splitLegend, 14, 42);
+
+                const clientInnovationsHead = [['Código', 'Cliente', 'Cidade', 'Bairro', 'Últ. Compra', ...categoryLegendForExport.map((_, i) => `${i + 1}`)]];
+                const clientInnovationsBody = innovationsByClientForExport.map(client => {
+                    const row = [
+                        client['Código'],
+                        client.fantasia || client.razaoSocial,
+                        client.cidade,
+                        client.bairro,
+                        formatDate(client.ultimaCompra)
+                    ];
+                    categoryLegendForExport.forEach((cat, index) => {
+                        const catName = cat.split(' - ')[1];
+                        row.push(client.innovationStatus[catName] ? '✓' : '✗');
+                    });
+                    return row;
+                });
+
+                doc.autoTable({
+                    head: clientInnovationsHead,
+                    body: clientInnovationsBody,
+                    startY: 55,
+                    theme: 'grid',
+                    styles: { fontSize: 7, cellPadding: 1.5, halign: 'center' },
+                    headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 7, fontStyle: 'bold' },
+                    columnStyles: {
+                        0: { halign: 'left' },
+                        1: { halign: 'left' },
+                        2: { halign: 'left' },
+                        3: { halign: 'left' },
+                        4: { halign: 'center' }
+                    },
+                    alternateRowStyles: { fillColor: [240, 248, 255] },
+                });
+            }
+            
+            const pageCount = doc.internal.getNumberOfPages();
+            for(let i = 1; i <= pageCount; i++) { 
+                doc.setPage(i); 
+                doc.setFontSize(9); 
+                doc.setTextColor(150); 
+                doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' }); 
+            }
+
+            const fileNameParam = vendedor.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'geral';
+            doc.save(`relatorio_inovacoes_mes_${fileNameParam}_${new Date().toISOString().slice(0,10)}.pdf`);
         }
 
 
@@ -3163,7 +3422,7 @@
             viewTableBtn.addEventListener('click', () => { chartView.classList.add('hidden'); tableView.classList.remove('hidden'); viewTableBtn.classList.add('hidden'); viewChartBtn.classList.remove('hidden'); updateAllVisuals(); });
             viewChartBtn.addEventListener('click', () => { tableView.classList.add('hidden'); chartView.classList.remove('hidden'); viewChartBtn.classList.add('hidden'); viewTableBtn.classList.remove('hidden'); updateAllVisuals(); });
             viewComparisonBtn.addEventListener('click', () => { mainDashboard.classList.add('hidden'); comparisonView.classList.remove('hidden'); updateAllComparisonFilters(); updateComparisonView(); });
-            viewStockBtn.addEventListener('click', () => { mainDashboard.classList.add('hidden'); stockView.classList.remove('hidden'); updateStockView(); }); 
+            viewStockBtn.addEventListener('click', () => { mainDashboard.classList.add('hidden'); stockView.classList.remove('hidden'); handleStockFilterChange(); }); 
             showCityBtn.addEventListener('click', () => { resetMainFilters(); mainDashboard.classList.add('hidden'); cityView.classList.remove('hidden'); document.getElementById('city-view-content').classList.add('hidden'); document.getElementById('city-view-loader').classList.remove('hidden'); setTimeout(() => { populateSupervisors('city-supervisor-filter', allSalesData); selectedCitySellers = updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData); updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData); updateCityView(); document.getElementById('city-view-loader').classList.add('hidden'); document.getElementById('city-view-content').classList.remove('hidden'); }, 10); });
             backToMainFromCityBtn.addEventListener('click', () => { resetCityFilters(); cityView.classList.add('hidden'); mainDashboard.classList.remove('hidden'); updateAllVisuals(); });
             showWeeklyBtn.addEventListener('click', () => { resetMainFilters(); mainDashboard.classList.add('hidden'); weeklyView.classList.remove('hidden'); populateWeeklyFilters(); updateWeeklyView(); });
@@ -3267,7 +3526,7 @@
                 if (e.target.closest('#city-suggestions > div')) { cityNameFilter.value = e.target.textContent; citySuggestions.classList.add('hidden'); updateCityView(); } 
                 if (e.target.closest('#comparison-city-suggestions > div')) { comparisonCityFilter.value = e.target.textContent; comparisonCitySuggestions.classList.add('hidden'); updateAllComparisonFilters(); updateComparisonView(); } 
                 else if (!comparisonCityFilter.contains(e.target)) comparisonCitySuggestions.classList.add('hidden'); 
-                if (e.target.closest('#stock-city-suggestions > div')) { stockCityFilter.value = e.target.textContent; stockCitySuggestions.classList.add('hidden'); updateStockView(); } 
+                if (e.target.closest('#stock-city-suggestions > div')) { stockCityFilter.value = e.target.textContent; stockCitySuggestions.classList.add('hidden'); handleStockFilterChange(); } 
                 else if (!stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden'); 
             });
 
@@ -3320,12 +3579,12 @@
             });
 
             comparisonCityFilter.addEventListener('input', () => {
-                const cityOptionsData = getComparisonFilteredData({ excludeFilter: 'city' }).historySales;
-                updateComparisonCitySuggestions(cityOptionsData);
+                const { currentSales, historySales } = getComparisonFilteredData({ excludeFilter: 'city' });
+                updateComparisonCitySuggestions([...currentSales, ...historySales]);
             });
             comparisonCityFilter.addEventListener('focus', () => {
-                const cityOptionsData = getComparisonFilteredData({ excludeFilter: 'city' }).historySales;
-                updateComparisonCitySuggestions(cityOptionsData);
+                const { currentSales, historySales } = getComparisonFilteredData({ excludeFilter: 'city' });
+                updateComparisonCitySuggestions([...currentSales, ...historySales]);
             });
             comparisonCityFilter.addEventListener('change', handleComparisonFilterChange); 
 
@@ -3361,17 +3620,7 @@
                     updateComparisonProductFilter();
                 }
             });
-
-            const handleStockFilterChange = () => {
-                const supervisorOptionsData = getStockFilteredData({ excludeFilter: 'supervisor' }).history;
-                populateSupervisors('stock-supervisor-filter', supervisorOptionsData);
-                updateStockSellerFilter();
-                updateStockSupplierFilter();
-                updateStockProductFilter();
-                updateStockCitySuggestions(getStockFilteredData({excludeFilter: 'city'}).sales);
-                updateStockView();
-            };
-
+            
             stockFilialFilter.addEventListener('change', handleStockFilterChange);
             clearStockFiltersBtn.addEventListener('click', resetStockFilters);
             stockFornecedorToggleContainer.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') { const fornecedor = e.target.dataset.fornecedor; if (currentStockFornecedor === fornecedor) { currentStockFornecedor = ''; e.target.classList.remove('active'); } else { currentStockFornecedor = fornecedor; stockFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); } handleStockFilterChange(); } });
@@ -3380,8 +3629,13 @@
             stockVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedStockSellers.push(value); else selectedStockSellers = selectedStockSellers.filter(s => s !== value); handleStockFilterChange(); } });
             stockSupplierFilterBtn.addEventListener('click', () => stockSupplierFilterDropdown.classList.toggle('hidden'));
             stockSupplierFilterDropdown.addEventListener('change', (e) => { if (e.target.dataset.filterType === 'stock' && e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) { if(!selectedStockSuppliers.includes(value)) selectedStockSuppliers.push(value); } else { selectedStockSuppliers = selectedStockSuppliers.filter(s => s !== value); } handleStockFilterChange(); } });
-            stockCityFilter.addEventListener('input', () => updateStockCitySuggestions(getStockFilteredData({excludeFilter: 'city'}).sales));
-            stockCityFilter.addEventListener('focus', () => updateStockCitySuggestions(getStockFilteredData({excludeFilter: 'city'}).sales));
+            
+            const debouncedStockCityUpdate = debounce(() => {
+                const cityData = getStockFilteredData({ excludeFilter: 'city' });
+                updateStockCitySuggestions([...cityData.sales, ...cityData.history]);
+            }, 300);
+            stockCityFilter.addEventListener('input', debouncedStockCityUpdate);
+            stockCityFilter.addEventListener('focus', debouncedStockCityUpdate);
             stockCityFilter.addEventListener('change', handleStockFilterChange); 
 
             stockComRedeBtn.addEventListener('click', () => stockRedeFilterDropdown.classList.toggle('hidden'));
@@ -3677,6 +3931,7 @@
             
             innovationsMonthFilialFilter.addEventListener('change', debouncedUpdateInnovationsMonth);
             clearInnovationsMonthFiltersBtn.addEventListener('click', resetInnovationsMonthFilters);
+            exportInnovationsMonthPdfBtn.addEventListener('click', exportInnovationsMonthPDF);
 
 
             document.addEventListener('click', (e) => {
@@ -3692,7 +3947,7 @@
         populateSupervisors('supervisor-filter', allSalesData);
         populateMainSupplierFilter('fornecedor-filter', [...allSalesData, ...allHistoryData]);
         populateSupervisors('city-supervisor-filter', allSalesData);
-        populateSupervisors('stock-supervisor-filter', allSalesData);
+        populateSupervisors('stock-supervisor-filter', [...allSalesData, ...allHistoryData]);
         updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
         updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
         
@@ -3706,7 +3961,7 @@
         updateStockSellerFilter();
         updateStockSupplierFilter();
         updateStockProductFilter();
-        updateStockCitySuggestions(allSalesData);
+        updateStockCitySuggestions([...allSalesData, ...allHistoryData]);
         
         initializeRedeFilters();
         setupEventListeners();
@@ -4311,7 +4566,7 @@
                             <div class="flex justify-between items-center mb-6">
                                 <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Gráfico de Cobertura por Categoria de Inovação</p></div>
                                 <div class="flex gap-4">
-                                    <button id="export-innovations-month-pdf-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Exportar</button>
+                                    <button id="export-innovations-month-pdf-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Exportar PDF</button>
                                     <button id="back-to-innovations-from-month-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar</button>
                                 </div>
                             </div>
@@ -4379,7 +4634,7 @@
                             <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 mb-6">
                                 <div id="innovations-month-chartContainer" class="relative h-96"></div>
                             </div>
-                             <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                             <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 mb-6">
                                 <h2 class="text-lg font-semibold text-white mb-4 text-center">Dados do Gráfico</h2>
                                 <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
                                     <table class="min-w-full text-sm text-left">
@@ -4394,6 +4649,17 @@
                                             </tr>
                                         </thead>
                                         <tbody id="innovations-month-table-body" class="divide-y divide-slate-700"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                <h2 class="text-lg font-semibold text-white mb-2 text-center">Inovações por cliente</h2>
+                                <div id="innovations-by-client-legend" class="text-xs text-slate-400 mb-4 p-2 bg-slate-800 rounded"></div>
+                                <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
+                                    <table class="min-w-full text-sm text-left">
+                                        <thead id="innovations-by-client-table-head" class="text-xs text-slate-300 uppercase sticky-header">
+                                        </thead>
+                                        <tbody id="innovations-by-client-table-body" class="divide-y divide-slate-700"></tbody>
                                     </table>
                                 </div>
                             </div>
