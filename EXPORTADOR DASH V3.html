@@ -3251,7 +3251,17 @@
                     ];
                     categoryLegendForExport.forEach((cat, index) => {
                         const catName = cat.split(' - ')[1];
-                        row.push(client.innovationStatus[catName] ? '✓' : '✗');
+                        const status = client.innovationStatus[catName];
+                        
+                        // Célula com conteúdo e estilo
+                        const cell = {
+                            content: status ? 'S' : 'N',
+                            styles: {
+                                textColor: status ? [34, 139, 34] : [220, 20, 60], // Verde para S, Vermelho para N
+                                fontStyle: 'bold'
+                            }
+                        };
+                        row.push(cell);
                     });
                     return row;
                 });
