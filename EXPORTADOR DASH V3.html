@@ -187,9 +187,32 @@
                 const clientInfo = clientMap.get(String(rawRow['CODCLI']).trim()) || {};
                 let vendorName = String(rawRow['NOME'] || '');
                 let supervisorName = String(rawRow['SUPERV'] || '');
-                let codUsur = String(rawRow['CODUSUR'] || '');
+                let codUsur = String(rawRow['CODUSUR'] || '').trim();
                 const pedido = String(rawRow['PEDIDO'] || '');
-                if (supervisorName.trim().toUpperCase() === 'OSÉAS SANTOS OL') supervisorName = 'OSVALDO NUNES O';
+                let codSupervisor = String(rawRow['CODSUPERVISOR'] || '').trim();
+
+                // --- INÍCIO DAS NOVAS REGRAS DE TRANSFERÊNCIA (LÓGICA CORRIGIDA) ---
+
+                // Passo 1: Vendas do Hiago (cód 18) são reatribuídas para Osvaldo (cód 1).
+                if (codSupervisor === '18') {
+                    supervisorName = 'OSVALDO NUNES O';
+                    codSupervisor = '1';
+                }
+
+                // Passo 2: Vendas do Oséias ou que agora são do Osvaldo (originais ou vindas do Hiago)
+                // são transferidas para Marcel (cód 20), mas SOMENTE SE o vendedor da venda for o RCA2 do cliente.
+                const supervisorAtualUpper = supervisorName.trim().toUpperCase();
+                if (supervisorAtualUpper === 'OSÉAS SANTOS OL' || codSupervisor === '1') {
+                    const rca2Cliente = clientInfo.rca2 ? String(clientInfo.rca2).trim() : '';
+                    // A transferência só ocorre se o RCA2 do cliente existir E for igual ao vendedor (CODUSUR) da linha da venda.
+                    if (rca2Cliente && codUsur === rca2Cliente) {
+                        supervisorName = 'MARCEL BURAK ME';
+                        codSupervisor = '20';
+                    }
+                }
+                
+                // --- FIM DAS NOVAS REGRAS ---
+
                 const nomeClienteParaLogica = (clientInfo.razaoSocial || '').toUpperCase();
                 const supervisorUpper = (supervisorName || '').trim().toUpperCase();
                 if (supervisorUpper === 'BALCAO' || supervisorUpper === 'BALCÃO') supervisorName = 'BALCAO';
@@ -220,7 +243,7 @@
                     TOTPESOLIQ: parseBrazilianNumber(rawRow['TOTPESOLIQ']), DTPED: dtPed, DTSAIDA: dtSaida, 
                     POSICAO: String(rawRow['POSICAO'] || ''),
                     FILIAL: filialValue,
-                    CODSUPERVISOR: String(rawRow['CODSUPERVISOR'] || '').trim(), // Adicionado para a nova regra
+                    CODSUPERVISOR: codSupervisor, // Atualizado para refletir a atribuição final
                     ESTOQUECX: parseBrazilianNumber(rawRow['ESTOQUECX']),
                     ESTOQUEUNIT: parseBrazilianNumber(rawRow['ESTOQUEUNIT']),
                     QTVENDA_EMBALAGEM_MASTER: isNaN(qtdeMaster) || qtdeMaster === 0 ? 0 : qtVenda / qtdeMaster
@@ -608,13 +631,17 @@
             });
             
             // --- Otimizações para Inovações ---
-            optimizedData.salesByClient_CurrentMonth = new Map();
+            optimizedData.salesByClientAndRca_CurrentMonth = new Map();
             allSalesData.forEach(s => {
-                if (s.VLVENDA > 0) {
-                    if (!optimizedData.salesByClient_CurrentMonth.has(s.CODCLI)) {
-                        optimizedData.salesByClient_CurrentMonth.set(s.CODCLI, new Set());
+                if (s.VLVENDA > 0 && s.CODCLI && s.PRODUTO && s.CODUSUR) {
+                    if (!optimizedData.salesByClientAndRca_CurrentMonth.has(s.CODCLI)) {
+                        optimizedData.salesByClientAndRca_CurrentMonth.set(s.CODCLI, new Map());
                     }
-                    optimizedData.salesByClient_CurrentMonth.get(s.CODCLI).add(s.PRODUTO);
+                    const clientSales = optimizedData.salesByClientAndRca_CurrentMonth.get(s.CODCLI);
+                    if (!clientSales.has(s.PRODUTO)) {
+                        clientSales.set(s.PRODUTO, new Set());
+                    }
+                    clientSales.get(s.PRODUTO).add(s.CODUSUR);
                 }
             });
 
@@ -623,14 +650,18 @@
             const previousMonth = (currentMonth === 0) ? 11 : currentMonth - 1;
             const previousMonthYear = (currentMonth === 0) ? currentYear - 1 : currentYear;
 
-            optimizedData.salesByClient_PreviousMonth = new Map();
+            optimizedData.salesByClientAndRca_PreviousMonth = new Map();
             allHistoryData.forEach(s => {
                 const saleDate = parseDate(s.DTPED);
-                if (s.VLVENDA > 0 && saleDate?.getMonth() === previousMonth && saleDate?.getFullYear() === previousMonthYear) {
-                    if (!optimizedData.salesByClient_PreviousMonth.has(s.CODCLI)) {
-                        optimizedData.salesByClient_PreviousMonth.set(s.CODCLI, new Set());
+                if (s.VLVENDA > 0 && s.CODCLI && s.PRODUTO && s.CODUSUR && saleDate?.getMonth() === previousMonth && saleDate?.getFullYear() === previousMonthYear) {
+                     if (!optimizedData.salesByClientAndRca_PreviousMonth.has(s.CODCLI)) {
+                        optimizedData.salesByClientAndRca_PreviousMonth.set(s.CODCLI, new Map());
                     }
-                    optimizedData.salesByClient_PreviousMonth.get(s.CODCLI).add(s.PRODUTO);
+                    const clientSales = optimizedData.salesByClientAndRca_PreviousMonth.get(s.CODCLI);
+                    if (!clientSales.has(s.PRODUTO)) {
+                        clientSales.set(s.PRODUTO, new Set());
+                    }
+                    clientSales.get(s.PRODUTO).add(s.CODUSUR);
                 }
             });
         }
@@ -2265,7 +2296,7 @@
                     }
                 }
                 const monthlyCurrentTotalFat = monthlyCurrentSales.reduce((sum, item) => sum + item.VLVENDA, 0);
-        
+
                 const salesByMonth = {};
                 historySales.forEach(sale => {
                     const saleDate = parseDate(sale.DTPED);
@@ -2477,7 +2508,9 @@
             const activeStockMap = getActiveStockMap(filial);
 
             const allProductsInScope = new Map();
-            [...filteredSales, ...filteredHistory].forEach(s => {
+            const allCombinedSales = [...filteredSales, ...filteredHistory];
+
+            allCombinedSales.forEach(s => {
                 if (!allProductsInScope.has(s.PRODUTO)) {
                     allProductsInScope.set(s.PRODUTO, {
                         code: s.PRODUTO,
@@ -2493,17 +2526,19 @@
             allProductsInScope.forEach(product => {
                 const stock = activeStockMap.get(product.code) || 0;
                 
+                // Vendas do Mês Atual + Histórico para o produto
+                const productAllSales = allCombinedSales.filter(s => s.PRODUTO === product.code);
                 const productHistorySales = filteredHistory.filter(s => s.PRODUTO === product.code);
-                const totalHistoryQty = productHistorySales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
                 
-                const historyMonthsCountForProduct = getUniqueMonthCount(productHistorySales);
-                const monthlyAvgSale = totalHistoryQty / historyMonthsCountForProduct; 
+                const totalQty = productAllSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                
+                // Média Mensal
+                const monthCountForProduct = getUniqueMonthCount(productAllSales);
+                const monthlyAvgSale = totalQty / monthCountForProduct; 
 
-                const productCurrentSales = filteredSales.filter(s => s.PRODUTO === product.code);
-                const combinedSalesForTrend = [...productHistorySales, ...productCurrentSales];
-                
+                // Média Diária para Tendência
                 const salesByDay = new Map();
-                combinedSalesForTrend.forEach(s => {
+                productAllSales.forEach(s => {
                     const date = parseDate(s.DTPED);
                     if (date) {
                         const dateString = date.toISOString().split('T')[0];
@@ -2511,21 +2546,20 @@
                         salesByDay.set(dateString, currentQty + s.QTVENDA_EMBALAGEM_MASTER);
                     }
                 });
-                
-                const totalSoldForTrend = combinedSalesForTrend.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
                 const saleDays = salesByDay.size;
-                const dailyAvgSaleForTrend = saleDays > 0 ? totalSoldForTrend / saleDays : 0;
+                const dailyAvgSaleForTrend = saleDays > 0 ? totalQty / saleDays : 0;
                 const trendDays = dailyAvgSaleForTrend > 0 ? (stock / dailyAvgSaleForTrend) : Infinity;
 
-                const currentMonthSalesQty = productCurrentSales
-                    .reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
-
+                const productCurrentSales = filteredSales.filter(s => s.PRODUTO === product.code);
+                const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                
                 productAnalysis.set(product.code, {
                     ...product,
                     stock,
                     monthlyAvgSale,
                     trendDays,
                     currentMonthSalesQty,
+                    isNew: productHistorySales.length === 0, // Um produto é novo se não tiver vendas no histórico
                     hasHistory: productHistorySales.length > 0,
                     soldThisMonth: currentMonthSalesQty > 0
                 });
@@ -2548,12 +2582,18 @@
             }
 
             stockAnalysisTableBody.innerHTML = sortedAnalysis.map(item => {
-                const trendText = isFinite(item.trendDays) ? `${Math.floor(item.trendDays)} dias` : 'N/A';
-                let trendColor = 'text-slate-400';
-                if (isFinite(item.trendDays)) {
-                    if (item.trendDays < 15) trendColor = 'text-red-400';
-                    else if (item.trendDays < 30) trendColor = 'text-yellow-400';
+                let trendText;
+                if (item.isNew && item.stock > 0 && item.monthlyAvgSale === 0) {
+                     trendText = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/30 text-blue-300">NOVO</span>`;
+                } else if (isFinite(item.trendDays)) {
+                    const trendDays = Math.floor(item.trendDays);
+                    let trendColor = 'text-slate-400';
+                    if (trendDays < 15) trendColor = 'text-red-400';
+                    else if (trendDays < 30) trendColor = 'text-yellow-400';
                     else trendColor = 'text-green-400';
+                    trendText = `<span class="font-bold ${trendColor}">${trendDays} dias</span>`;
+                } else {
+                    trendText = 'N/A';
                 }
 
                 return `
@@ -2562,7 +2602,7 @@
                         <td class="px-4 py-2 text-xs">(${item.codfor}) ${item.fornecedor}</td>
                         <td class="px-4 py-2 text-right text-xs">${item.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                         <td class="px-4 py-2 text-right text-xs">${item.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                        <td class="px-4 py-2 text-right text-xs font-bold ${trendColor}">${trendText}</td>
+                        <td class="px-4 py-2 text-right text-xs">${trendText}</td>
                     </tr>
                 `;
             }).join('');
@@ -2682,7 +2722,20 @@
         
         function updateInnovationsView() {
             const productsToAnalyze = selectedInnovationsProducts;
-            const { clients } = getInnovationsFilteredData();
+            const { clients, sales, history } = getInnovationsFilteredData();
+
+            const supervisor = innovationsSupervisorFilter.value;
+            const sellers = selectedInnovationsSellers;
+            const sellerRcaCodes = new Set();
+            if (sellers.length > 0) {
+                sellers.forEach(sellerName => {
+                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
+                    if (rcaCode) sellerRcaCodes.add(rcaCode);
+                });
+            } else if (supervisor) {
+                (optimizedData.rcasBySupervisor.get(supervisor) || []).forEach(rca => sellerRcaCodes.add(rca));
+            }
+
 
             const activeClientsForCoverage = clients.filter(c => {
                 const codcli = c['Código'];
@@ -2725,13 +2778,20 @@
                 let clientsWhoBoughtProductPrevious = 0;
 
                 activeClientCodes.forEach(codcli => {
-                    const currentSales = optimizedData.salesByClient_CurrentMonth.get(codcli);
-                    if (currentSales && currentSales.has(productCode)) {
-                        clientsWhoBoughtProductCurrent++;
+                    const clientSalesCurrent = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
+                    if (clientSalesCurrent && clientSalesCurrent.has(productCode)) {
+                        const rcasWhoSold = clientSalesCurrent.get(productCode);
+                        if (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca))) {
+                            clientsWhoBoughtProductCurrent++;
+                        }
                     }
-                    const previousSales = optimizedData.salesByClient_PreviousMonth.get(codcli);
-                    if (previousSales && previousSales.has(productCode)) {
-                         clientsWhoBoughtProductPrevious++;
+
+                    const clientSalesPrevious = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
+                     if (clientSalesPrevious && clientSalesPrevious.has(productCode)) {
+                        const rcasWhoSold = clientSalesPrevious.get(productCode);
+                        if (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca))) {
+                            clientsWhoBoughtProductPrevious++;
+                        }
                     }
                 });
 
@@ -2747,13 +2807,19 @@
                 }
 
                 activeClientCodes.forEach(codcli => {
-                    const currentSales = optimizedData.salesByClient_CurrentMonth.get(codcli);
+                    const currentSales = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
                     if (currentSales && currentSales.has(productCode)) {
-                        clientsWhoBoughtSelectionCurrent.add(codcli);
+                         const rcasWhoSold = currentSales.get(productCode);
+                        if (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca))) {
+                             clientsWhoBoughtSelectionCurrent.add(codcli);
+                        }
                     }
-                    const previousSales = optimizedData.salesByClient_PreviousMonth.get(codcli);
+                    const previousSales = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
                     if (previousSales && previousSales.has(productCode)) {
-                         clientsWhoBoughtSelectionPrevious.add(codcli);
+                         const rcasWhoSold = previousSales.get(productCode);
+                         if (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca))) {
+                            clientsWhoBoughtSelectionPrevious.add(codcli);
+                         }
                     }
                 });
 
@@ -2863,6 +2929,18 @@
             
             const { clients: filteredClients } = getInnovationsMonthFilteredData();
 
+            const supervisor = innovationsMonthSupervisorFilter.value;
+            const sellers = selectedInnovationsMonthSellers;
+            const sellerRcaCodes = new Set();
+            if (sellers.length > 0) {
+                sellers.forEach(sellerName => {
+                    const rcaCode = optimizedData.rcaCodeByName.get(sellerName);
+                    if (rcaCode) sellerRcaCodes.add(rcaCode);
+                });
+            } else if (supervisor) {
+                (optimizedData.rcasBySupervisor.get(supervisor) || []).forEach(rca => sellerRcaCodes.add(rca));
+            }
+
             const categories = {};
             if (innovationsMonthData && innovationsMonthData.length > 0) {
                 innovationsMonthData.forEach(item => {
@@ -2912,13 +2990,19 @@
                 let clientsPreviousCount = 0;
 
                 activeClientCodes.forEach(codcli => {
-                    const currentSales = optimizedData.salesByClient_CurrentMonth.get(codcli);
-                    if (currentSales && [...productCodes].some(p => currentSales.has(p))) {
+                    const currentSales = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
+                    if (currentSales && [...productCodes].some(p => {
+                        const rcasWhoSold = currentSales.get(p);
+                        return rcasWhoSold && (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca)));
+                    })) {
                         clientsCurrentCount++;
                         clientsWhoBoughtAnyVisibleProductCurrent.add(codcli);
                     }
-                    const previousSales = optimizedData.salesByClient_PreviousMonth.get(codcli);
-                    if (previousSales && [...productCodes].some(p => previousSales.has(p))) {
+                    const previousSales = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
+                    if (previousSales && [...productCodes].some(p => {
+                        const rcasWhoSold = previousSales.get(p);
+                        return rcasWhoSold && (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca)));
+                    })) {
                         clientsPreviousCount++;
                         clientsWhoBoughtAnyVisibleProductPrevious.add(codcli);
                     }
@@ -2950,9 +3034,12 @@
                     const productCode = product.Codigo;
                     let clientsWhoBoughtProduct = 0;
                     activeClientCodes.forEach(codcli => {
-                        const currentSales = optimizedData.salesByClient_CurrentMonth.get(codcli);
+                        const currentSales = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
                         if (currentSales && currentSales.has(productCode)) {
-                             clientsWhoBoughtProduct++;
+                             const rcasWhoSold = currentSales.get(productCode);
+                             if (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca))) {
+                                clientsWhoBoughtProduct++;
+                             }
                         }
                     });
                     
@@ -3032,10 +3119,11 @@
                     let clientsPreviousCount = 0;
 
                     activeClientCodes.forEach(codcli => {
-                         const currentSales = optimizedData.salesByClient_CurrentMonth.get(codcli);
-                         if(currentSales && currentSales.has(productCode)) clientsCurrentCount++;
-                         const previousSales = optimizedData.salesByClient_PreviousMonth.get(codcli);
-                         if(previousSales && previousSales.has(productCode)) clientsPreviousCount++;
+                         const currentSales = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
+                         if(currentSales && currentSales.has(productCode) && (sellerRcaCodes.size === 0 || [...currentSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) clientsCurrentCount++;
+
+                         const previousSales = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
+                         if(previousSales && previousSales.has(productCode) && (sellerRcaCodes.size === 0 || [...previousSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) clientsPreviousCount++;
                     });
                     
                     const coverageCurrent = activeClientsCount > 0 ? (clientsCurrentCount / activeClientsCount) * 100 : 0;
@@ -3111,11 +3199,14 @@
             innovationsByClientTableHead.innerHTML = tableHeadHTML;
 
             const clientInnovationStatus = activeClients.map(client => {
-                const clientBoughtProducts = optimizedData.salesByClient_CurrentMonth.get(client['Código']) || new Set();
+                const clientBoughtProducts = optimizedData.salesByClientAndRca_CurrentMonth.get(client['Código']) || new Map();
                 const status = {};
                 categoryNames.forEach(catName => {
                     const productCodes = categories[catName].productCodes;
-                    status[catName] = [...productCodes].some(p => clientBoughtProducts.has(p));
+                    status[catName] = [...productCodes].some(p => {
+                        const rcasWhoSold = clientBoughtProducts.get(p);
+                        return rcasWhoSold && (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca)));
+                    });
                 });
                 return { ...client, innovationStatus: status };
             });
@@ -3661,7 +3752,7 @@
             stockCityFilter.addEventListener('focus', debouncedStockCityUpdate);
             stockCityFilter.addEventListener('change', handleStockFilterChange); 
 
-            stockComRedeBtn.addEventListener('click', () => stockRedeFilterDropdown.classList.toggle('hidden'));
+            
             stockRedeGroupContainer.addEventListener('click', (e) => {
                 if(e.target.closest('button')) {
                     const button = e.target.closest('button');
@@ -4724,4 +4815,5 @@
     </script>
 </body>
 </html>
+
 
