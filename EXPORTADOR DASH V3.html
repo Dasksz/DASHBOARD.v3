@@ -494,19 +494,29 @@
                 
                 self.postMessage({ type: 'progress', status: 'Agregando pedidos...', percentage: 90 });
                 const aggregateOrders = (data) => {
-                    const orders = {};
+                    const orders = new Map();
                     data.forEach(row => {
                         if (!row.PEDIDO) return;
-                        if (!orders[row.PEDIDO]) {
-                            orders[row.PEDIDO] = { ...row, QTVENDA: 0, VLVENDA: 0, TOTPESOLIQ: 0, FORNECEDORES: new Set(), CODFORS: new Set() };
+                        if (!orders.has(row.PEDIDO)) {
+                            orders.set(row.PEDIDO, { 
+                                ...row, 
+                                QTVENDA: 0, 
+                                VLVENDA: 0, 
+                                VLBONIFIC: 0,
+                                TOTPESOLIQ: 0, 
+                                FORNECEDORES: new Set(), 
+                                CODFORS: new Set() 
+                            });
                         }
-                        orders[row.PEDIDO].QTVENDA += row.QTVENDA;
-                        orders[row.PEDIDO].VLVENDA += row.VLVENDA;
-                        orders[row.PEDIDO].TOTPESOLIQ += row.TOTPESOLIQ;
-                        if (row.OBSERVACAOFOR) orders[row.PEDIDO].FORNECEDORES.add(row.OBSERVACAOFOR);
-                        if (row.CODFOR) orders[row.PEDIDO].CODFORS.add(row.CODFOR);
+                        const order = orders.get(row.PEDIDO);
+                        order.QTVENDA += row.QTVENDA;
+                        order.VLVENDA += row.VLVENDA;
+                        order.VLBONIFIC += row.VLBONIFIC;
+                        order.TOTPESOLIQ += row.TOTPESOLIQ;
+                        if (row.OBSERVACAOFOR) order.FORNECEDORES.add(row.OBSERVACAOFOR);
+                        if (row.CODFOR) order.CODFORS.add(row.CODFOR);
                     });
-                    return Object.values(orders).map(order => {
+                    return Array.from(orders.values()).map(order => {
                         order.FORNECEDORES_LIST = Array.from(order.FORNECEDORES);
                         order.FORNECEDORES_STR = order.FORNECEDORES_LIST.join(', ');
                         order.CODFORS_LIST = Array.from(order.CODFORS);
@@ -2340,7 +2350,7 @@
                     }
                 }
                 const monthlyCurrentTotalFat = monthlyCurrentSales.reduce((sum, item) => sum + item.VLVENDA, 0);
-        
+
                 const salesByMonth = {};
                 historySales.forEach(sale => {
                     const saleDate = parseDate(sale.DTPED);
@@ -3167,7 +3177,7 @@
                              }
                         }
                         if (!gotIt && currentBonus && currentBonus.has(productCode)) {
-                            const rcasWhoBonused = currentBonus.get(productCode);
+                            const rcasWhoBonused = currentBonus.get(p);
                             if (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca))) {
                                 gotIt = true;
                             }
@@ -5009,3 +5019,5 @@
     </script>
 </body>
 </html>
+
+
