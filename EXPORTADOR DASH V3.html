@@ -239,7 +239,9 @@
                     OBSERVACAOFOR: String(rawRow['OBSERVACAOFOR'] || '').trim(), CODFOR: String(rawRow['CODFOR'] || '').trim(),
                     CODUSUR: codUsur, CODCLI: String(rawRow['CODCLI'] || '').trim(), CLIENTE_NOME: clientInfo.nomeCliente || 'N/A',
                     CIDADE: clientInfo.cidade || 'N/A', BAIRRO: clientInfo.bairro || 'N/A',
-                    QTVENDA: qtVenda, VLVENDA: parseBrazilianNumber(rawRow['VLVENDA']),
+                    QTVENDA: qtVenda, 
+                    VLVENDA: parseBrazilianNumber(rawRow['VLVENDA']),
+                    VLBONIFIC: parseBrazilianNumber(rawRow['VLBONIFIC']), // Adicionado para ler bonificações
                     TOTPESOLIQ: parseBrazilianNumber(rawRow['TOTPESOLIQ']), DTPED: dtPed, DTSAIDA: dtSaida, 
                     POSICAO: String(rawRow['POSICAO'] || ''),
                     FILIAL: filialValue,
@@ -664,6 +666,36 @@
                     clientSales.get(s.PRODUTO).add(s.CODUSUR);
                 }
             });
+
+            // --- NOVAS OTIMIZAÇÕES PARA BONIFICAÇÃO ---
+            optimizedData.bonificationsByClientAndRca_CurrentMonth = new Map();
+            allSalesData.forEach(s => {
+                if (s.VLBONIFIC > 0 && s.CODCLI && s.PRODUTO && s.CODUSUR) {
+                    if (!optimizedData.bonificationsByClientAndRca_CurrentMonth.has(s.CODCLI)) {
+                        optimizedData.bonificationsByClientAndRca_CurrentMonth.set(s.CODCLI, new Map());
+                    }
+                    const clientBonuses = optimizedData.bonificationsByClientAndRca_CurrentMonth.get(s.CODCLI);
+                    if (!clientBonuses.has(s.PRODUTO)) {
+                        clientBonuses.set(s.PRODUTO, new Set());
+                    }
+                    clientBonuses.get(s.PRODUTO).add(s.CODUSUR);
+                }
+            });
+
+            optimizedData.bonificationsByClientAndRca_PreviousMonth = new Map();
+            allHistoryData.forEach(s => {
+                const saleDate = parseDate(s.DTPED);
+                if (s.VLBONIFIC > 0 && s.CODCLI && s.PRODUTO && s.CODUSUR && saleDate?.getMonth() === previousMonth && saleDate?.getFullYear() === previousMonthYear) {
+                     if (!optimizedData.bonificationsByClientAndRca_PreviousMonth.has(s.CODCLI)) {
+                        optimizedData.bonificationsByClientAndRca_PreviousMonth.set(s.CODCLI, new Map());
+                    }
+                    const clientBonuses = optimizedData.bonificationsByClientAndRca_PreviousMonth.get(s.CODCLI);
+                    if (!clientBonuses.has(s.PRODUTO)) {
+                        clientBonuses.set(s.PRODUTO, new Set());
+                    }
+                    clientBonuses.get(s.PRODUTO).add(s.CODUSUR);
+                }
+            });
         }
 
         aggregatedOrders.sort((a, b) => {
@@ -827,8 +859,13 @@
         const innovationsSelectionCoverageCountKpi = document.getElementById('innovations-selection-coverage-count-kpi');
         const innovationsSelectionCoverageValueKpiPrevious = document.getElementById('innovations-selection-coverage-value-kpi-previous');
         const innovationsSelectionCoverageCountKpiPrevious = document.getElementById('innovations-selection-coverage-count-kpi-previous');
+        const innovationsBonusCoverageValueKpi = document.getElementById('innovations-bonus-coverage-value-kpi');
+        const innovationsBonusCoverageCountKpi = document.getElementById('innovations-bonus-coverage-count-kpi');
+        const innovationsBonusCoverageValueKpiPrevious = document.getElementById('innovations-bonus-coverage-value-kpi-previous');
+        const innovationsBonusCoverageCountKpiPrevious = document.getElementById('innovations-bonus-coverage-count-kpi-previous');
         const innovationsMonthBtn = document.getElementById('innovations-month-btn');
         const innovationsFilialFilter = document.getElementById('innovations-filial-filter');
+        const innovationsIncludeBonusCheckbox = document.getElementById('innovations-include-bonus');
 
         const innovationsMonthView = document.getElementById('innovations-month-view');
         const backToInnovationsFromMonthBtn = document.getElementById('back-to-innovations-from-month-btn');
@@ -851,7 +888,12 @@
         const innovationsMonthSelectionCoverageCountKpi = document.getElementById('innovations-month-selection-coverage-count-kpi');
         const innovationsMonthSelectionCoverageValueKpiPrevious = document.getElementById('innovations-month-selection-coverage-value-kpi-previous');
         const innovationsMonthSelectionCoverageCountKpiPrevious = document.getElementById('innovations-month-selection-coverage-count-kpi-previous');
+        const innovationsMonthBonusCoverageValueKpi = document.getElementById('innovations-month-bonus-coverage-value-kpi');
+        const innovationsMonthBonusCoverageCountKpi = document.getElementById('innovations-month-bonus-coverage-count-kpi');
+        const innovationsMonthBonusCoverageValueKpiPrevious = document.getElementById('innovations-month-bonus-coverage-value-kpi-previous');
+        const innovationsMonthBonusCoverageCountKpiPrevious = document.getElementById('innovations-month-bonus-coverage-count-kpi-previous');
         const exportInnovationsMonthPdfBtn = document.getElementById('export-innovations-month-pdf-btn');
+        const innovationsMonthIncludeBonusCheckbox = document.getElementById('innovations-month-include-bonus');
 
 
         const modal = document.getElementById('order-details-modal');
@@ -910,6 +952,8 @@
         let selectedInnovationsMonthSellers = [];
         
         let globalInnovationsKPI = { activeClients: 0, topProduct: { product: '-', coverage: 0, clients: 0 } };
+        let innovationsIncludeBonus = true;
+        let innovationsMonthIncludeBonus = true;
         
         // Adiciona variáveis globais para exportação de dados das novas tabelas
         let innovationsMonthTableDataForExport = [];
@@ -2296,7 +2340,7 @@
                     }
                 }
                 const monthlyCurrentTotalFat = monthlyCurrentSales.reduce((sum, item) => sum + item.VLVENDA, 0);
-
+        
                 const salesByMonth = {};
                 historySales.forEach(sale => {
                     const saleDate = parseDate(sale.DTPED);
@@ -2711,6 +2755,8 @@
             innovationsSupervisorFilter.value = '';
             innovationsCityFilter.value = '';
             innovationsFilialFilter.value = 'ambas';
+            innovationsIncludeBonusCheckbox.checked = true;
+            innovationsIncludeBonus = true;
             selectedInnovationsSellers = [];
             selectedInnovationsSuppliers = [];
             selectedInnovationsProducts = [];
@@ -2757,6 +2803,10 @@
                 innovationsSelectionCoverageCountKpi.textContent = `0 de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
                 innovationsSelectionCoverageValueKpiPrevious.textContent = '0%';
                 innovationsSelectionCoverageCountKpiPrevious.textContent = `0 de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
+                innovationsBonusCoverageValueKpi.textContent = '0%';
+                innovationsBonusCoverageCountKpi.textContent = `0 de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
+                innovationsBonusCoverageValueKpiPrevious.textContent = '0%';
+                innovationsBonusCoverageCountKpiPrevious.textContent = `0 de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
                 innovationsTopCoverageValueKpi.textContent = '0%';
                 innovationsTopCoverageProductKpi.textContent = '-';
                 innovationsTopCoverageCountKpi.textContent = '0 PDVs';
@@ -2767,59 +2817,93 @@
             innovationsResults.classList.remove('hidden');
 
             const tableData = [];
-            const clientsWhoBoughtSelectionCurrent = new Set();
-            const clientsWhoBoughtSelectionPrevious = new Set();
+            const clientsWhoGotSelectionCurrent = new Set();
+            const clientsWhoGotSelectionPrevious = new Set();
+            const clientsWhoGotBonusSelectionCurrent = new Set();
+            const clientsWhoGotBonusSelectionPrevious = new Set();
             let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
             
             productsToAnalyze.forEach(productCode => {
                 const productInfo = allSalesData.find(s => s.PRODUTO === productCode) || allHistoryData.find(s => s.PRODUTO === productCode) || { DESCRICAO: `Produto ${productCode}`};
 
-                let clientsWhoBoughtProductCurrent = 0;
-                let clientsWhoBoughtProductPrevious = 0;
+                let clientsWhoGotProductCurrent = 0;
+                let clientsWhoGotProductPrevious = 0;
 
                 activeClientCodes.forEach(codcli => {
                     const clientSalesCurrent = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
+                    const clientBonusCurrent = innovationsIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(codcli) : null;
+                    
+                    let boughtCurrent = false;
                     if (clientSalesCurrent && clientSalesCurrent.has(productCode)) {
                         const rcasWhoSold = clientSalesCurrent.get(productCode);
                         if (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca))) {
-                            clientsWhoBoughtProductCurrent++;
+                            boughtCurrent = true;
+                        }
+                    }
+                    let bonusCurrent = false;
+                    if (clientBonusCurrent && clientBonusCurrent.has(productCode)) {
+                        const rcasWhoBonused = clientBonusCurrent.get(productCode);
+                         if (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca))) {
+                            bonusCurrent = true;
                         }
                     }
 
+                    if(boughtCurrent || bonusCurrent) clientsWhoGotProductCurrent++;
+
+
                     const clientSalesPrevious = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
+                    const clientBonusPrevious = innovationsIncludeBonus ? optimizedData.bonificationsByClientAndRca_PreviousMonth.get(codcli) : null;
+
+                    let boughtPrevious = false;
                      if (clientSalesPrevious && clientSalesPrevious.has(productCode)) {
                         const rcasWhoSold = clientSalesPrevious.get(productCode);
                         if (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca))) {
-                            clientsWhoBoughtProductPrevious++;
+                            boughtPrevious = true;
                         }
                     }
+                    let bonusPrevious = false;
+                    if (clientBonusPrevious && clientBonusPrevious.has(productCode)) {
+                        const rcasWhoBonused = clientBonusPrevious.get(productCode);
+                         if (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca))) {
+                            bonusPrevious = true;
+                        }
+                    }
+                    if(boughtPrevious || bonusPrevious) clientsWhoGotProductPrevious++;
+
                 });
 
-                const coverageCurrent = activeClientsCount > 0 ? (clientsWhoBoughtProductCurrent / activeClientsCount) * 100 : 0;
-                const coveragePrevious = activeClientsCount > 0 ? (clientsWhoBoughtProductPrevious / activeClientsCount) * 100 : 0;
+                const coverageCurrent = activeClientsCount > 0 ? (clientsWhoGotProductCurrent / activeClientsCount) * 100 : 0;
+                const coveragePrevious = activeClientsCount > 0 ? (clientsWhoGotProductPrevious / activeClientsCount) * 100 : 0;
 
                 if (coverageCurrent > topCoverageItem.coverage) {
                     topCoverageItem = {
                         name: `(${productCode}) ${productInfo.DESCRICAO}`,
                         coverage: coverageCurrent,
-                        clients: clientsWhoBoughtProductCurrent
+                        clients: clientsWhoGotProductCurrent
                     };
                 }
 
                 activeClientCodes.forEach(codcli => {
                     const currentSales = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
-                    if (currentSales && currentSales.has(productCode)) {
-                         const rcasWhoSold = currentSales.get(productCode);
-                        if (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca))) {
-                             clientsWhoBoughtSelectionCurrent.add(codcli);
-                        }
+                    const currentBonus = innovationsIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(codcli) : null;
+
+                    if ((currentSales && currentSales.has(productCode) && (sellerRcaCodes.size === 0 || [...currentSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) ||
+                        (currentBonus && currentBonus.has(productCode) && (sellerRcaCodes.size === 0 || [...currentBonus.get(productCode)].some(rca => sellerRcaCodes.has(rca))))) {
+                        clientsWhoGotSelectionCurrent.add(codcli);
                     }
+                    if (currentBonus && currentBonus.has(productCode) && (sellerRcaCodes.size === 0 || [...currentBonus.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) {
+                        clientsWhoGotBonusSelectionCurrent.add(codcli);
+                    }
+
                     const previousSales = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
-                    if (previousSales && previousSales.has(productCode)) {
-                         const rcasWhoSold = previousSales.get(productCode);
-                         if (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca))) {
-                            clientsWhoBoughtSelectionPrevious.add(codcli);
-                         }
+                    const previousBonus = innovationsIncludeBonus ? optimizedData.bonificationsByClientAndRca_PreviousMonth.get(codcli) : null;
+
+                    if ((previousSales && previousSales.has(productCode) && (sellerRcaCodes.size === 0 || [...previousSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) ||
+                        (previousBonus && previousBonus.has(productCode) && (sellerRcaCodes.size === 0 || [...previousBonus.get(productCode)].some(rca => sellerRcaCodes.has(rca))))) {
+                        clientsWhoGotSelectionPrevious.add(codcli);
+                    }
+                    if (previousBonus && previousBonus.has(productCode) && (sellerRcaCodes.size === 0 || [...previousBonus.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) {
+                        clientsWhoGotBonusSelectionPrevious.add(codcli);
                     }
                 });
 
@@ -2832,8 +2916,8 @@
                     coveragePrevious: coveragePrevious,
                     coverageCurrent: coverageCurrent,
                     variation: variation,
-                    clientsPreviousCount: clientsWhoBoughtProductPrevious,
-                    clientsCurrentCount: clientsWhoBoughtProductCurrent
+                    clientsPreviousCount: clientsWhoGotProductPrevious,
+                    clientsCurrentCount: clientsWhoGotProductCurrent
                 });
             });
             
@@ -2842,15 +2926,26 @@
             innovationsTopCoverageProductKpi.title = topCoverageItem.name;
             innovationsTopCoverageCountKpi.textContent = `${topCoverageItem.clients.toLocaleString('pt-BR')} PDVs`;
 
-            const selectionCoveredCountCurrent = clientsWhoBoughtSelectionCurrent.size;
+            const selectionCoveredCountCurrent = clientsWhoGotSelectionCurrent.size;
             const selectionCoveragePercentCurrent = activeClientsCount > 0 ? (selectionCoveredCountCurrent / activeClientsCount) * 100 : 0;
             innovationsSelectionCoverageValueKpi.textContent = `${selectionCoveragePercentCurrent.toFixed(2)}%`;
             innovationsSelectionCoverageCountKpi.textContent = `${selectionCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
             
-            const selectionCoveredCountPrevious = clientsWhoBoughtSelectionPrevious.size;
+            const selectionCoveredCountPrevious = clientsWhoGotSelectionPrevious.size;
             const selectionCoveragePercentPrevious = activeClientsCount > 0 ? (selectionCoveredCountPrevious / activeClientsCount) * 100 : 0;
             innovationsSelectionCoverageValueKpiPrevious.textContent = `${selectionCoveragePercentPrevious.toFixed(2)}%`;
             innovationsSelectionCoverageCountKpiPrevious.textContent = `${selectionCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
+            
+            const bonusCoveredCountCurrent = clientsWhoGotBonusSelectionCurrent.size;
+            const bonusCoveragePercentCurrent = activeClientsCount > 0 ? (bonusCoveredCountCurrent / activeClientsCount) * 100 : 0;
+            innovationsBonusCoverageValueKpi.textContent = `${bonusCoveragePercentCurrent.toFixed(2)}%`;
+            innovationsBonusCoverageCountKpi.textContent = `${bonusCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
+            
+            const bonusCoveredCountPrevious = clientsWhoGotBonusSelectionPrevious.size;
+            const bonusCoveragePercentPrevious = activeClientsCount > 0 ? (bonusCoveredCountPrevious / activeClientsCount) * 100 : 0;
+            innovationsBonusCoverageValueKpiPrevious.textContent = `${bonusCoveragePercentPrevious.toFixed(2)}%`;
+            innovationsBonusCoverageCountKpiPrevious.textContent = `${bonusCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
+
 
             tableData.sort((a, b) => b.coverageCurrent - a.coverageCurrent);
 
@@ -2919,6 +3014,8 @@
             innovationsMonthCityFilter.value = '';
             innovationsMonthFilialFilter.value = 'ambas';
             innovationsMonthCategoryFilter.value = '';
+            innovationsMonthIncludeBonusCheckbox.checked = true;
+            innovationsMonthIncludeBonus = true;
             selectedInnovationsMonthSellers = [];
             updateSellerFilter('', innovationsMonthVendedorFilterDropdown, innovationsMonthVendedorFilterText, [], allSalesData);
             updateInnovationsMonthView();
@@ -2979,8 +3076,10 @@
             const categoryAnalysis = {};
             let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
             
-            const clientsWhoBoughtAnyVisibleProductCurrent = new Set();
-            const clientsWhoBoughtAnyVisibleProductPrevious = new Set();
+            const clientsWhoGotAnyVisibleProductCurrent = new Set();
+            const clientsWhoGotAnyVisibleProductPrevious = new Set();
+            const clientsWhoGotBonusAnyVisibleProductCurrent = new Set();
+            const clientsWhoGotBonusAnyVisibleProductPrevious = new Set();
             
             for (const categoryName in categories) {
                  if(selectedCategory && categoryName !== selectedCategory) continue;
@@ -2991,20 +3090,43 @@
 
                 activeClientCodes.forEach(codcli => {
                     const currentSales = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
-                    if (currentSales && [...productCodes].some(p => {
+                    const currentBonus = innovationsMonthIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(codcli) : null;
+                    if ((currentSales && [...productCodes].some(p => {
                         const rcasWhoSold = currentSales.get(p);
                         return rcasWhoSold && (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca)));
-                    })) {
+                    })) || (currentBonus && [...productCodes].some(p => {
+                        const rcasWhoBonused = currentBonus.get(p);
+                        return rcasWhoBonused && (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca)));
+                    }))) {
                         clientsCurrentCount++;
-                        clientsWhoBoughtAnyVisibleProductCurrent.add(codcli);
+                        clientsWhoGotAnyVisibleProductCurrent.add(codcli);
                     }
+                    
+                    if (currentBonus && [...productCodes].some(p => {
+                        const rcasWhoBonused = currentBonus.get(p);
+                        return rcasWhoBonused && (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca)));
+                    })) {
+                        clientsWhoGotBonusAnyVisibleProductCurrent.add(codcli);
+                    }
+
+
                     const previousSales = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
-                    if (previousSales && [...productCodes].some(p => {
+                    const previousBonus = innovationsMonthIncludeBonus ? optimizedData.bonificationsByClientAndRca_PreviousMonth.get(codcli) : null;
+                    if ((previousSales && [...productCodes].some(p => {
                         const rcasWhoSold = previousSales.get(p);
                         return rcasWhoSold && (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca)));
-                    })) {
+                    })) || (previousBonus && [...productCodes].some(p => {
+                        const rcasWhoBonused = previousBonus.get(p);
+                        return rcasWhoBonused && (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca)));
+                    }))) {
                         clientsPreviousCount++;
-                        clientsWhoBoughtAnyVisibleProductPrevious.add(codcli);
+                        clientsWhoGotAnyVisibleProductPrevious.add(codcli);
+                    }
+                     if (previousBonus && [...productCodes].some(p => {
+                        const rcasWhoBonused = previousBonus.get(p);
+                        return rcasWhoBonused && (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca)));
+                    })) {
+                        clientsWhoGotBonusAnyVisibleProductPrevious.add(codcli);
                     }
                 });
                 
@@ -3032,28 +3154,43 @@
 
                 productsInCategory.forEach(product => {
                     const productCode = product.Codigo;
-                    let clientsWhoBoughtProduct = 0;
+                    let clientsWhoGotProduct = 0;
                     activeClientCodes.forEach(codcli => {
                         const currentSales = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
+                        const currentBonus = innovationsMonthIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(codcli) : null;
+                        
+                        let gotIt = false;
                         if (currentSales && currentSales.has(productCode)) {
                              const rcasWhoSold = currentSales.get(productCode);
                              if (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca))) {
-                                clientsWhoBoughtProduct++;
+                                gotIt = true;
                              }
                         }
+                        if (!gotIt && currentBonus && currentBonus.has(productCode)) {
+                            const rcasWhoBonused = currentBonus.get(productCode);
+                            if (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca))) {
+                                gotIt = true;
+                            }
+                        }
+                        if(gotIt) clientsWhoGotProduct++;
                     });
                     
-                    const coverage = activeClientsCount > 0 ? (clientsWhoBoughtProduct / activeClientsCount) * 100 : 0;
+                    const coverage = activeClientsCount > 0 ? (clientsWhoGotProduct / activeClientsCount) * 100 : 0;
                     if (coverage > topCoverageItem.coverage) {
-                        topCoverageItem = { name: `(${productCode}) ${product.Produto}`, coverage: coverage, clients: clientsWhoBoughtProduct };
+                        topCoverageItem = { name: `(${productCode}) ${product.Produto}`, coverage: coverage, clients: clientsWhoGotProduct };
                     }
                 });
             }
             
-            const selectionCoveredCountCurrent = clientsWhoBoughtAnyVisibleProductCurrent.size;
+            const selectionCoveredCountCurrent = clientsWhoGotAnyVisibleProductCurrent.size;
             const selectionCoveragePercentCurrent = activeClientsCount > 0 ? (selectionCoveredCountCurrent / activeClientsCount) * 100 : 0;
-            const selectionCoveredCountPrevious = clientsWhoBoughtAnyVisibleProductPrevious.size;
+            const selectionCoveredCountPrevious = clientsWhoGotAnyVisibleProductPrevious.size;
             const selectionCoveragePercentPrevious = activeClientsCount > 0 ? (selectionCoveredCountPrevious / activeClientsCount) * 100 : 0;
+            
+            const bonusCoveredCountCurrent = clientsWhoGotBonusAnyVisibleProductCurrent.size;
+            const bonusCoveragePercentCurrent = activeClientsCount > 0 ? (bonusCoveredCountCurrent / activeClientsCount) * 100 : 0;
+            const bonusCoveredCountPrevious = clientsWhoGotBonusAnyVisibleProductPrevious.size;
+            const bonusCoveragePercentPrevious = activeClientsCount > 0 ? (bonusCoveredCountPrevious / activeClientsCount) * 100 : 0;
             
             innovationsMonthActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
             innovationsMonthTopCoverageValueKpi.textContent = `${topCoverageItem.coverage.toFixed(2)}%`;
@@ -3061,10 +3198,16 @@
             innovationsMonthTopCoverageKpi.title = topCoverageItem.name;
             innovationsMonthTopCoverageCountKpi.textContent = `${topCoverageItem.clients.toLocaleString('pt-BR')} PDVs`;
             document.getElementById('innovations-month-top-coverage-title').textContent = selectedCategory ? 'Produto com Maior Cobertura' : 'Categoria com Maior Cobertura';
+            
             innovationsMonthSelectionCoverageValueKpi.textContent = `${selectionCoveragePercentCurrent.toFixed(2)}%`;
             innovationsMonthSelectionCoverageCountKpi.textContent = `${selectionCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
             innovationsMonthSelectionCoverageValueKpiPrevious.textContent = `${selectionCoveragePercentPrevious.toFixed(2)}%`;
             innovationsMonthSelectionCoverageCountKpiPrevious.textContent = `${selectionCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
+            
+            innovationsMonthBonusCoverageValueKpi.textContent = `${bonusCoveragePercentCurrent.toFixed(2)}%`;
+            innovationsMonthBonusCoverageCountKpi.textContent = `${bonusCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
+            innovationsMonthBonusCoverageValueKpiPrevious.textContent = `${bonusCoveragePercentPrevious.toFixed(2)}%`;
+            innovationsMonthBonusCoverageCountKpiPrevious.textContent = `${bonusCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
 
             chartLabels = Object.keys(categoryAnalysis).sort((a,b) => categoryAnalysis[b].coverageCurrent - categoryAnalysis[a].coverageCurrent);
             const chartDataCurrent = chartLabels.map(cat => categoryAnalysis[cat].coverageCurrent);
@@ -3120,10 +3263,18 @@
 
                     activeClientCodes.forEach(codcli => {
                          const currentSales = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
-                         if(currentSales && currentSales.has(productCode) && (sellerRcaCodes.size === 0 || [...currentSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) clientsCurrentCount++;
+                         const currentBonus = innovationsMonthIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(codcli) : null;
+                         if((currentSales && currentSales.has(productCode) && (sellerRcaCodes.size === 0 || [...currentSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) || 
+                            (currentBonus && currentBonus.has(productCode) && (sellerRcaCodes.size === 0 || [...currentBonus.get(productCode)].some(rca => sellerRcaCodes.has(rca))))) {
+                                clientsCurrentCount++;
+                         }
 
                          const previousSales = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
-                         if(previousSales && previousSales.has(productCode) && (sellerRcaCodes.size === 0 || [...previousSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) clientsPreviousCount++;
+                         const previousBonus = innovationsMonthIncludeBonus ? optimizedData.bonificationsByClientAndRca_PreviousMonth.get(codcli) : null;
+                         if((previousSales && previousSales.has(productCode) && (sellerRcaCodes.size === 0 || [...previousSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) || 
+                           (previousBonus && previousBonus.has(productCode) && (sellerRcaCodes.size === 0 || [...previousBonus.get(productCode)].some(rca => sellerRcaCodes.has(rca))))) {
+                            clientsPreviousCount++;
+                         }
                     });
                     
                     const coverageCurrent = activeClientsCount > 0 ? (clientsCurrentCount / activeClientsCount) * 100 : 0;
@@ -3200,12 +3351,16 @@
 
             const clientInnovationStatus = activeClients.map(client => {
                 const clientBoughtProducts = optimizedData.salesByClientAndRca_CurrentMonth.get(client['Código']) || new Map();
+                const clientBonusedProducts = innovationsMonthIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(client['Código']) : null;
                 const status = {};
                 categoryNames.forEach(catName => {
                     const productCodes = categories[catName].productCodes;
                     status[catName] = [...productCodes].some(p => {
                         const rcasWhoSold = clientBoughtProducts.get(p);
-                        return rcasWhoSold && (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca)));
+                        const rcasWhoBonused = clientBonusedProducts ? clientBonusedProducts.get(p) : null;
+                        const sold = rcasWhoSold && (sellerRcaCodes.size === 0 || [...rcasWhoSold].some(rca => sellerRcaCodes.has(rca)));
+                        const bonused = rcasWhoBonused && (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca)));
+                        return sold || bonused;
                     });
                 });
                 return { ...client, innovationStatus: status };
@@ -3750,9 +3905,9 @@
             }, 300);
             stockCityFilter.addEventListener('input', debouncedStockCityUpdate);
             stockCityFilter.addEventListener('focus', debouncedStockCityUpdate);
-            stockCityFilter.addEventListener('change', handleStockFilterChange); 
-
-            
+            stockCityFilter.addEventListener('change', handleStockFilterChange);
+        
+            stockComRedeBtn.addEventListener('click', () => stockRedeFilterDropdown.classList.toggle('hidden'));
             stockRedeGroupContainer.addEventListener('click', (e) => {
                 if(e.target.closest('button')) {
                     const button = e.target.closest('button');
@@ -3918,7 +4073,10 @@
 
             innovationsMonthCategoryFilter.addEventListener('change', updateInnovationsMonthView);
             innovationsFilialFilter.addEventListener('change', debouncedUpdateInnovations);
-
+            innovationsIncludeBonusCheckbox.addEventListener('change', (e) => {
+                innovationsIncludeBonus = e.target.checked;
+                updateInnovationsView();
+            });
 
             innovationsSupervisorFilter.addEventListener('change', () => {
                 selectedInnovationsSellers = [];
@@ -4003,6 +4161,10 @@
             });
             
             const debouncedUpdateInnovationsMonth = debounce(updateInnovationsMonthView, 400);
+            innovationsMonthIncludeBonusCheckbox.addEventListener('change', (e) => {
+                innovationsMonthIncludeBonus = e.target.checked;
+                updateInnovationsMonthView();
+            });
 
             innovationsMonthSupervisorFilter.addEventListener('change', () => {
                 selectedInnovationsMonthSellers = [];
@@ -4578,11 +4740,11 @@
                                 </div>
                             </div>
                             
-                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                             <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
                                 <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
                                     <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p>
                                     <p id="innovations-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p>
-                                    <p class="text-xs text-slate-500">Base de clientes para os KPIs</p>
+                                    <p class="text-xs text-slate-500">Base para os KPIs</p>
                                 </div>
                                 <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
                                     <p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p>
@@ -4593,6 +4755,16 @@
                                     <p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p>
                                     <p id="innovations-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
                                     <p id="innovations-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Ant.</p>
+                                    <p id="innovations-bonus-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
+                                    <p id="innovations-bonus-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Atual</p>
+                                    <p id="innovations-bonus-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
+                                    <p id="innovations-bonus-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
                                 </div>
                                 <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
                                     <p id="innovations-top-coverage-title" class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p>
@@ -4641,7 +4813,7 @@
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                                    <div class="lg:col-span-3 relative">
+                                    <div class="lg:col-span-2 relative">
                                         <label for="innovations-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Produto (Obrigatório)</label>
                                         <button id="innovations-product-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
                                             <span id="innovations-product-filter-text">Selecione um ou mais produtos</span>
@@ -4650,6 +4822,12 @@
                                         <div id="innovations-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg">
                                             <div class="p-2 border-b border-slate-600"><input type="text" id="innovations-product-search-input" placeholder="Buscar produto..." class="bg-slate-800 text-xs rounded-lg block w-full p-2 border border-slate-600 text-white"></div>
                                             <div id="innovations-product-list" class="max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                        </div>
+                                    </div>
+                                     <div class="flex items-center justify-start h-full pb-1">
+                                        <div class="flex items-center">
+                                            <input id="innovations-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2">
+                                            <label for="innovations-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label>
                                         </div>
                                     </div>
                                     <button id="clear-innovations-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
@@ -4684,11 +4862,11 @@
                                     <button id="back-to-innovations-from-month-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar</button>
                                 </div>
                             </div>
-                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                             <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
                                 <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
                                     <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p>
                                     <p id="innovations-month-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p>
-                                    <p class="text-xs text-slate-500">Base de clientes para os KPIs</p>
+                                    <p class="text-xs text-slate-500">Base para os KPIs</p>
                                 </div>
                                 <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
                                     <p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p>
@@ -4701,6 +4879,16 @@
                                     <p id="innovations-month-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
                                 </div>
                                 <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Ant.</p>
+                                    <p id="innovations-month-bonus-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
+                                    <p id="innovations-month-bonus-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Atual</p>
+                                    <p id="innovations-month-bonus-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
+                                    <p id="innovations-month-bonus-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
                                     <p id="innovations-month-top-coverage-title" class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p>
                                     <p id="innovations-month-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p>
                                     <p id="innovations-month-top-coverage-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p>
@@ -4708,7 +4896,7 @@
                                 </div>
                             </div>
                             <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
                                     <div>
                                         <label for="innovations-month-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
                                         <select id="innovations-month-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white">
@@ -4735,6 +4923,12 @@
                                             <option value="05">Filial 05</option>
                                             <option value="08">Filial 08</option>
                                         </select>
+                                    </div>
+                                     <div class="flex items-center justify-start h-full pb-1">
+                                        <div class="flex items-center">
+                                            <input id="innovations-month-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2">
+                                            <label for="innovations-month-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label>
+                                        </div>
                                     </div>
                                     <button id="clear-innovations-month-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
                                 </div>
@@ -4815,5 +5009,3 @@
     </script>
 </body>
 </html>
-
-
