@@ -34,6 +34,10 @@
             outline-offset: 2px;
             transform: scale(1.1);
         }
+        /* Estilo básico para tooltip - pode ser removido se não for mais usado em outros lugares */
+        .tooltip { position: relative; display: inline-block; cursor: pointer; }
+        .tooltip .tooltip-text { visibility: hidden; width: auto; min-width: 80px; background-color: #1e293b; color: #fff; text-align: center; border-radius: 6px; padding: 5px 8px; position: absolute; z-index: 1001; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+        .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
     </style>
 </head>
 <body class="text-slate-200 flex items-center justify-center min-h-screen">
@@ -413,7 +417,6 @@
                     return salesArray.map(sale => {
                         const override = overrideMap.get(sale.CODCLI);
                         if (override && sale.FILIAL === '05') {
-                            // Correção do spread operator
                             return { ...sale, FILIAL: override };
                         }
                         return sale;
@@ -431,7 +434,6 @@
                     return salesArray.map(sale => {
                         // A regra é aplicada se o código do supervisor for 12 E o RCA estiver na lista
                         if (sale.CODSUPERVISOR === '12' && tiagoSellersToMoveTo08.has(sale.CODUSUR)) {
-                            // Correção do spread operator
                             return { ...sale, FILIAL: '08' };
                         }
                         return sale;
@@ -466,7 +468,6 @@
                     data.forEach(row => {
                         if (!row.PEDIDO) return;
                         if (!orders.has(row.PEDIDO)) {
-                            // Correção do spread operator
                             orders.set(row.PEDIDO, {
                                 ...row,
                                 QTVENDA: 0,
@@ -1587,7 +1588,6 @@
                     const pepsicoTotal = clientSales.filter(s => s.OBSERVACAOFOR === 'PEPSICO').reduce((sum, s) => sum + s.VLVENDA, 0);
                     const multimarcasTotal = clientSales.filter(s => s.OBSERVACAOFOR === 'MULTIMARCAS').reduce((sum, s) => sum + s.VLVENDA, 0);
                     const outrosTotal = totalFaturamentoFiltrado - pepsicoTotal - multimarcasTotal;
-                    // Correção do spread operator
                     salesByActiveClient[codcli] = { ...client, total: totalFaturamentoFiltrado, pepsico: pepsicoTotal, multimarcas: multimarcasTotal, outros: outrosTotal };
                 }
             });
@@ -1601,6 +1601,7 @@
                 if (data.multimarcas > 0) tooltipParts.push(`MULTIMARCAS: ${data.multimarcas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                 if (data.outros > 0.001) tooltipParts.push(`OUTROS: ${data.outros.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                 const tooltipText = tooltipParts.length > 0 ? tooltipParts.join('<br>') : 'Sem detalhamento de categoria';
+                // Usando div tooltip aqui ainda - pode ser removido se não for necessário em outro lugar
                 return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['Código']}">${data['Código']}</a></td><td class="px-4 py-2 flex items-center">${data.fantasia || data.razaoSocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${data.cidade}</td><td class="px-4 py-2">${data.bairro}</td><td class="px-4 py-2">${data.rcas[0] || '-'}</td><td class="px-4 py-2">${data.rcas[1] || '-'}</td></tr>`
             }).join('');
 
@@ -1801,6 +1802,89 @@
                 }
             }
             return positiveClients;
+        }
+
+        // Função para formatar valor completo (ex: R$ 1.658.352,26)
+        const formatValue = (val, format) => {
+            if (format === 'currency') return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            if (format === 'decimal') return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+            if (format === 'mix') return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return val.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+        };
+
+        // Função para formatar valor abreviado (ex: 1.66 Mi)
+        const formatAbbreviated = (val, format) => {
+            let prefix = format === 'currency' ? 'R$ ' : '';
+            if (val >= 1000000) {
+                return prefix + (val / 1000000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Mi';
+            } else if (val >= 1000) {
+                 return prefix + (val / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' K';
+            }
+            return null; // Retorna nulo se não precisar abreviar
+        };
+
+        function renderKpiCards(kpis) {
+            const container = document.getElementById('comparison-kpi-container');
+
+            container.innerHTML = kpis.map(kpi => {
+                const variation = kpi.history > 0 ? ((kpi.current - kpi.history) / kpi.history) * 100 : (kpi.current > 0 ? 100 : 0);
+                const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400';
+
+                // *** INÍCIO DA MODIFICAÇÃO PARA ABREVIAR SEM TOOLTIP ***
+                let displayValue = formatValue(kpi.current, kpi.format);
+
+                // Apenas abrevia o KPI de "Faturamento Total"
+                if (kpi.title === 'Faturamento Total') {
+                    const abbreviated = formatAbbreviated(kpi.current, kpi.format);
+                    if (abbreviated) {
+                        displayValue = abbreviated; // Usa o valor abreviado
+                    }
+                }
+                // *** FIM DA MODIFICAÇÃO PARA ABREVIAR SEM TOOLTIP ***
+
+                return `<div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                            <p class="text-slate-400 text-sm">${kpi.title}</p>
+                            <p class="text-2xl font-bold text-white my-2">${displayValue}</p>
+                            <p class="text-sm ${colorClass}">${variation.toFixed(2)}% vs Média do Trimestre</p>
+                            <p class="text-xs text-slate-500">Média Trim.: ${formatValue(kpi.history, kpi.format)}</p>
+                        </div>`;
+            }).join('');
+        }
+
+        function calculateAverageMixComDevolucao(salesData, targetCodfors) {
+            if (!salesData || salesData.length === 0 || !targetCodfors || targetCodfors.length === 0) return 0;
+
+            const clientProductNetValue = new Map();
+
+            for (const sale of salesData) {
+                if (!targetCodfors.includes(String(sale.CODFOR))) continue;
+                if (!sale.CODCLI || !sale.PRODUTO) continue;
+
+                if (!clientProductNetValue.has(sale.CODCLI)) {
+                    clientProductNetValue.set(sale.CODCLI, new Map());
+                }
+                const clientProducts = clientProductNetValue.get(sale.CODCLI);
+
+                const currentValue = clientProducts.get(sale.PRODUTO) || 0;
+                clientProducts.set(sale.PRODUTO, currentValue + (Number(sale.VLVENDA) || 0));
+            }
+
+            const mixValues = [];
+            for (const products of clientProductNetValue.values()) {
+                let positiveProductCount = 0;
+                for (const netValue of products.values()) {
+                    if (netValue > 1) {
+                        positiveProductCount++;
+                    }
+                }
+                if (positiveProductCount > 0) {
+                    mixValues.push(positiveProductCount);
+                }
+            }
+
+            if (mixValues.length === 0) return 0;
+
+            return mixValues.reduce((a, b) => a + b, 0) / mixValues.length;
         }
 
         function calculateAverageMixComDevolucao(salesData, targetCodfors) {
@@ -2320,7 +2404,7 @@
                     }
                 }
                 const monthlyCurrentTotalFat = monthlyCurrentSales.reduce((sum, item) => sum + item.VLVENDA, 0);
-
+        
                 const salesByMonth = {};
                 historySales.forEach(sale => {
                     const saleDate = parseDate(sale.DTPED);
@@ -3524,29 +3608,6 @@
         }
 
 
-        function renderKpiCards(kpis) {
-            const container = document.getElementById('comparison-kpi-container');
-
-            const formatValue = (val, format) => {
-                if (format === 'currency') return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                if (format === 'decimal') return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-                if (format === 'mix') return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                return val.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
-            };
-
-            container.innerHTML = kpis.map(kpi => {
-                const variation = kpi.history > 0 ? ((kpi.current - kpi.history) / kpi.history) * 100 : (kpi.current > 0 ? 100 : 0);
-                const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400';
-
-                return `<div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
-                            <p class="text-slate-400 text-sm">${kpi.title}</p>
-                            <p class="text-2xl font-bold text-white my-2">${formatValue(kpi.current, kpi.format)}</p>
-                            <p class="text-sm ${colorClass}">${variation.toFixed(2)}% vs Média do Trimestre</p>
-                            <p class="text-xs text-slate-500">Média Trim.: ${formatValue(kpi.history, kpi.format)}</p>
-                        </div>`;
-            }).join('');
-        }
-
         function openModal(pedidoId) {
             const orderInfo = aggregatedOrders.find(order => order.PEDIDO == pedidoId);
             const itemsDoPedido = allSalesData.filter(item => item.PEDIDO == pedidoId);
@@ -3660,7 +3721,6 @@
 
         function debounce(func, delay = 300) {
             let timeout;
-            // Correção da função debounce
             return function(...args) {
                 clearTimeout(timeout);
                 timeout = setTimeout(() => {
@@ -4203,10 +4263,8 @@
         initializeOptimizedDataStructures();
         calculateHistoricalBests();
         populateSupervisors('supervisor-filter', allSalesData);
-        // Correção do spread operator
         populateMainSupplierFilter('fornecedor-filter', [...allSalesData, ...allHistoryData]);
         populateSupervisors('city-supervisor-filter', allSalesData);
-        // Correção do spread operator
         populateSupervisors('stock-supervisor-filter', [...allSalesData, ...allHistoryData]);
         updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
         updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
@@ -4221,7 +4279,6 @@
         updateStockSellerFilter();
         updateStockSupplierFilter();
         updateStockProductFilter();
-        // Correção do spread operator
         updateStockCitySuggestions([...allSalesData, ...allHistoryData]);
 
         initializeRedeFilters();
@@ -4994,7 +5051,6 @@
     </script>
 </body>
 </html>
-
 
 
 
