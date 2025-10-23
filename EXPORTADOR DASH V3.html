@@ -182,8 +182,7 @@
         };
 
         // Função principal de processamento de dados de vendas (executada dentro do worker)
-        // MODIFICADO: Adicionado hiagoSupervisorName e hiagoSupervisorCode
-        const processSalesData = (rawData, clientMap, productMasterMap, hiagoSupervisorName, hiagoSupervisorCode) => {
+        const processSalesData = (rawData, clientMap, productMasterMap, newRcaSupervisorMap) => {
             return rawData.map(rawRow => {
                 const clientInfo = clientMap.get(String(rawRow['CODCLI']).trim()) || {};
                 let vendorName = String(rawRow['NOME'] || '');
@@ -192,35 +191,21 @@
                 const pedido = String(rawRow['PEDIDO'] || '');
                 let codSupervisor = String(rawRow['CODSUPERVISOR'] || '').trim();
 
-                // --- INÍCIO DAS REGRAS DE ATRIBUIÇÃO SIMPLIFICADAS ---
+                // --- INÍCIO DA NOVA REGRA DE ATRIBUIÇÃO MESTRE ---
+                const supervisorInfo = newRcaSupervisorMap.get(codUsur);
+                if (supervisorInfo) {
+                    vendorName = supervisorInfo.NOME;
+                    supervisorName = supervisorInfo.SUPERV;
+                    codSupervisor = supervisorInfo.CODSUPERVISOR;
+                }
+                // --- FIM DA NOVA REGRA DE ATRIBUIÇÃO MESTRE ---
 
-                // REGRA 1: Vendas AMERICANAS (BALCAO)
+                // --- REGRAS ANTIGAS DE TRANSFERÊNCIA REMOVIDAS ---
+
                 const nomeClienteParaLogica = (clientInfo.razaoSocial || '').toUpperCase();
                 const supervisorUpper = (supervisorName || '').trim().toUpperCase();
                 if (supervisorUpper === 'BALCAO' || supervisorUpper === 'BALCÃO') supervisorName = 'BALCAO';
-                if (supervisorName === 'BALCAO' && nomeClienteParaLogica.includes('AMERICANAS')) {
-                    vendorName = 'AMERICANAS';
-                    codUsur = '1001';
-                    // O supervisor permanece 'BALCAO'
-                }
-
-                // REGRA 2: Vendas Pedido '120' (VD HIAGO)
-                // MODIFICADO: Não atribui mais ao supervisor 'HIAGO ASSUNCAO'.
-                // Atribui ao supervisor com mais RCAs na filial 05, que é calculado dinamicamente.
-                if (pedido.startsWith('120')) {
-                    vendorName = 'VD HIAGO';
-                    codUsur = '1002';
-                    if (hiagoSupervisorName) {
-                        supervisorName = hiagoSupervisorName;
-                    }
-                    if (hiagoSupervisorCode) {
-                        codSupervisor = hiagoSupervisorCode;
-                    }
-                }
-
-                // --- FIM DAS REGRAS DE ATRIBUIÇÃO ---
-                // O bloco complexo de reatribuição Hiago -> Osvaldo -> Marcel foi removido.
-
+                // Regras de Americanas e VD HIAGO removidas
                 let dtPed = rawRow['DTPED'];
                 const dtSaida = rawRow['DTSAIDA'];
                 const parsedDtPed = parseDate(dtPed);
@@ -270,6 +255,37 @@
                     readFile(innovationsFile)
                 ]);
 
+                // --- INÍCIO DA NOVA REGRA DE ATRIBUIÇÃO MESTRE (PASSO 1) ---
+                self.postMessage({ type: 'progress', status: 'Criando mapa mestre de supervisores...', percentage: 20 });
+                const newRcaSupervisorMap = new Map();
+                const lastSaleDateMap = new Map();
+
+                salesDataRaw.forEach(row => {
+                    try {
+                        const codUsur = String(row['CODUSUR'] || '').trim();
+                        const dtPed = row['DTPED'];
+                        if (!codUsur || !dtPed) return;
+
+                        const saleDate = parseDate(dtPed);
+                        if (!saleDate || isNaN(saleDate.getTime())) return;
+
+                        const lastDate = lastSaleDateMap.get(codUsur);
+                        // Compara se a data da venda atual é maior OU IGUAL (>=) para pegar a última entrada em caso de datas iguais
+                        if (!lastDate || saleDate >= lastDate) {
+                            lastSaleDateMap.set(codUsur, saleDate);
+                            newRcaSupervisorMap.set(codUsur, {
+                                NOME: String(row['NOME'] || ''),
+                                SUPERV: String(row['SUPERV'] || ''),
+                                CODSUPERVISOR: String(row['CODSUPERVISOR'] || '').trim()
+                            });
+                        }
+                    } catch (e) {
+                        // Ignora erros em uma única linha para não parar o processo
+                        console.error('Erro ao processar linha para mapa mestre:', e, row);
+                    }
+                });
+                // --- FIM DA NOVA REGRA DE ATRIBUIÇÃO MESTRE ---
+
                 self.postMessage({ type: 'progress', status: 'Extraindo estoque do arquivo de vendas...', percentage: 25 });
                 const stockMap05 = new Map();
                 const stockMap08 = new Map();
@@ -306,21 +322,20 @@
                     const pedido = String(rawRow['PEDIDO'] || '');
                     const codCli = String(rawRow['CODCLI'] || '').trim();
                     if(!codCli) return;
-                    if (pedido.startsWith('120')) clientRcaOverrides.set(codCli, '1002');
+                    // Lógica de VD HIAGO removida daqui, pois agora é tratada pelo Mapa Mestre
                 });
 
                 self.postMessage({ type: 'progress', status: 'Processando clientes...', percentage: 50 });
                 const clientMap = new Map();
-                // --- INÍCIO DA CORREÇÃO ---
                 clientsDataRaw.forEach(client => {
                     const codCli = String(client['Código'] || '').trim();
                     if (!codCli) return;
 
                     const rca1 = String(client['RCA 1'] || '');
-                    // const rca2 = String(client['RCA 2'] || ''); // REMOVIDO
+                    const rca2 = String(client['RCA 2'] || '');
                     const rcas = new Set();
                     if (rca1) rcas.add(rca1);
-                    // if (rca2) rcas.add(rca2); // REMOVIDO
+                    if (rca2) rcas.add(rca2);
 
                     let registrationDateStr = client['Data e Hora de Cadastro'] || '';
                     if (registrationDateStr.includes(' ')) registrationDateStr = registrationDateStr.split(' ')[0];
@@ -329,7 +344,7 @@
                         'Código': codCli,
                         rcas: Array.from(rcas),
                         rca1: rca1,
-                        // rca2: rca2, // REMOVIDO
+                        rca2: rca2,
                         cidade: String(client['Nome da Cidade'] || 'N/A'),
                         nomeCliente: String(client['Fantasia'] || client['Cliente'] || 'N/A'),
                         bairro: String(client['Bairro'] || 'N/A'),
@@ -342,136 +357,27 @@
                         telefone: String(client['Telefone Comercial'] || 'N/A'),
                         email: String(client['E-mail'] || 'N/A'),
                         ramo: String(client['Descricao'] || 'N/A'),
-                        ultimaCompra: client['Data da Última Compra'], // Esta era a última linha antes
-                        // Código em falta restaurado abaixo:
+                        ultimaCompra: client['Data da Última Compra'],
                         dataCadastro: registrationDateStr,
                         bloqueio: String(client['Bloqueio'] || '').trim().toUpperCase(),
                         inscricaoEstadual: String(client['Insc. Est. / Produtor'] || 'N/A')
                     };
                     if (clientRcaOverrides.has(codCli)) clientData.rcas.unshift(clientRcaOverrides.get(codCli));
-                    if (clientData.razaoSocial.toUpperCase().includes('AMERICANAS')) clientData.rcas.unshift('1001');
-                    clientMap.set(codCli, clientData); // Linha crucial que faltava
-                }); // Fecho correto do forEach
-                // --- FIM DA CORREÇÃO ---
-
+                    // Lógica de Americanas removida daqui
+                    clientMap.set(codCli, clientData);
+                });
 
                 self.postMessage({ type: 'progress', status: 'Mapeando vendedores...', percentage: 60 });
-                const rcaInfoMap = new Map();
+                // rcaInfoMap, populateRcaMap e chamadas removidas.
+                // O newRcaSupervisorMap já foi criado.
 
-                // MODIFICADO: Mapeia também o CODSUPERVISOR
-                const populateRcaMap = (row) => {
-                    const codusur = String(row['CODUSUR'] || '').trim();
-                    // Usamos o salesDataRaw (vendas atuais) como fonte da verdade para o supervisor
-                    if (codusur && !rcaInfoMap.has(codusur)) {
-                        rcaInfoMap.set(codusur, {
-                            NOME: String(row['NOME'] || ''),
-                            SUPERV: String(row['SUPERV'] || ''),
-                            CODSUPERVISOR: String(row['CODSUPERVISOR'] || '') // Adicionado
-                        });
-                    }
-                };
-                // Popula o mapa APENAS com os dados de vendas atuais
-                salesDataRaw.forEach(populateRcaMap);
-
-                // NOVA LÓGICA: Calcular supervisor majoritário da Filial 05 para o VD HIAGO
-                self.postMessage({ type: 'progress', status: 'Calculando supervisor dinâmico...', percentage: 61 });
-                const tiagoSellersToMoveTo08 = new Set(['291', '292', '293', '284', '289', '287', '286']);
-                const rcaCountBySupervisorFilial05 = new Map();
-                const supervisorDetails = new Map(); // Para guardar nome e código
-
-                salesDataRaw.forEach(row => {
-                    let filialValue = String(row['FILIAL'] || '').trim();
-                    if (filialValue === '5') filialValue = '05';
-                    if (filialValue === '8') filialValue = '08';
-
-                    const codUsur = String(row['CODUSUR'] || '').trim();
-                    const codSupervisor = String(row['CODSUPERVISOR'] || '').trim();
-                    const supervisorName = String(row['SUPERV'] || '');
-
-                    if (!codUsur || !codSupervisor || !supervisorName) return;
-
-                    // Salva os detalhes do supervisor (código -> nome)
-                    if (!supervisorDetails.has(codSupervisor)) {
-                        supervisorDetails.set(codSupervisor, supervisorName);
-                    }
-
-                    // Verifica a regra do Tiago ANTES de contar
-                    const isTiagoSellerMoving = (codSupervisor === '12' && tiagoSellersToMoveTo08.has(codUsur));
-
-                    // Só conta se for da Filial 05 E NÃO for um vendedor que será movido
-                    if (filialValue === '05' && !isTiagoSellerMoving) {
-                        if (!rcaCountBySupervisorFilial05.has(codSupervisor)) {
-                            rcaCountBySupervisorFilial05.set(codSupervisor, new Set());
-                        }
-                        rcaCountBySupervisorFilial05.get(codSupervisor).add(codUsur);
-                    }
-                });
-
-                let majoritySupervisorCode = '';
-                let majoritySupervisorName = '';
-                let maxCount = 0;
-
-                rcaCountBySupervisorFilial05.forEach((rcas, codSupervisor) => {
-                    if (rcas.size > maxCount) {
-                        maxCount = rcas.size;
-                        majoritySupervisorCode = codSupervisor;
-                        majoritySupervisorName = supervisorDetails.get(codSupervisor) || 'N/A';
-                    }
-                });
-                // Fim da nova lógica
-
-
-                // LÓGICA DE REATRIBUIÇÃO DO HISTÓRICO MODIFICADA
                 self.postMessage({ type: 'progress', status: 'Reatribuindo vendas do trimestre...', percentage: 65 });
-                const reattributedHistoryDataRaw = historyDataRaw.map(sale => {
-                    const codCli = String(sale['CODCLI'] || '').trim();
-                    if (!codCli) return sale;
-
-                    // Mantém a exceção para o cliente 9569 e RCA 53
-                    const codUsurOriginal = String(sale['CODUSUR'] || '').trim();
-                    if (codCli === '9569' && codUsurOriginal === '53') {
-                        return sale; // Mantém a venda original sem reatribuir
-                    }
-
-                    const clientData = clientMap.get(codCli);
-                    if (!clientData) return sale; // Cliente não encontrado no cadastro
-
-                    // Pega o RCA 1 ATUAL do cliente
-                    const currentRca1 = clientData.rca1;
-
-                    // Se o cliente não tem RCA 1 ou o RCA 1 é 53, não faz nada
-                    if (!currentRca1 || currentRca1 === '53') {
-                        return sale;
-                    }
-
-                    const newSale = { ...sale };
-
-                    // REGRA 1: Atribui a venda ao RCA 1 atual do cliente
-                    // REGRA 2: Atribui ao SUPERVISOR atual daquele RCA 1 (buscando no rcaInfoMap)
-                    if (rcaInfoMap.has(currentRca1)) {
-                        const newOwnerInfo = rcaInfoMap.get(currentRca1);
-                        newSale['CODUSUR'] = currentRca1;
-                        newSale['NOME'] = newOwnerInfo.NOME;
-                        newSale['SUPERV'] = newOwnerInfo.SUPERV;
-                        newSale['CODSUPERVISOR'] = newOwnerInfo.CODSUPERVISOR; // Atribui o código do supervisor atual
-                    } else {
-                        // Se o RCA 1 do cliente não existe nas vendas atuais, mantém o RCA original da venda,
-                        // mas tenta pelo menos atualizar o supervisor (caso o RCA 1 seja o mesmo da venda original)
-                        if (currentRca1 === codUsurOriginal && rcaInfoMap.has(codUsurOriginal)) {
-                             const newOwnerInfo = rcaInfoMap.get(codUsurOriginal);
-                             newSale['SUPERV'] = newOwnerInfo.SUPERV;
-                             newSale['CODSUPERVISOR'] = newOwnerInfo.CODSUPERVISOR;
-                        }
-                        // Se não encontrar, a venda histórica fica com os dados originais de RCA/Supervisor
-                    }
-
-                    return newSale;
-                });
+                // Bloco de reattributedHistoryDataRaw removido.
 
                 self.postMessage({ type: 'progress', status: 'Cruzando dados de vendas...', percentage: 70 });
-                // MODIFICADO: Passa os dados do supervisor do Hiago para a função
-                const processedSalesData = processSalesData(salesDataRaw, clientMap, productMasterMap, majoritySupervisorName, majoritySupervisorCode);
-                const processedHistoryData = processSalesData(reattributedHistoryDataRaw, clientMap, productMasterMap, majoritySupervisorName, majoritySupervisorCode);
+                // Modificado para passar o newRcaSupervisorMap
+                const processedSalesData = processSalesData(salesDataRaw, clientMap, productMasterMap, newRcaSupervisorMap);
+                const processedHistoryData = processSalesData(historyDataRaw, clientMap, productMasterMap, newRcaSupervisorMap);
 
                 self.postMessage({ type: 'progress', status: 'Aplicando regra de filial...', percentage: 75 });
 
@@ -507,6 +413,7 @@
                     return salesArray.map(sale => {
                         const override = overrideMap.get(sale.CODCLI);
                         if (override && sale.FILIAL === '05') {
+                            // Correção do spread operator
                             return { ...sale, FILIAL: override };
                         }
                         return sale;
@@ -516,14 +423,15 @@
                 let finalSalesData = applyBranchOverride(processedSalesData, clientBranchOverride);
                 let finalHistoryData = applyBranchOverride(processedHistoryData, clientBranchOverride);
 
-                // REGRA PARA VENDEDORES DO SUPERVISOR "TIAGO JOSÉ DE S" (CODSUPERVISOR 12) - MANTIDA
+                // NOVA REGRA PARA VENDEDORES DO SUPERVISOR "TIAGO JOSÉ DE S" (CODSUPERVISOR 12)
                 self.postMessage({ type: 'progress', status: 'Aplicando regra específica para Supervisor Tiago...', percentage: 78 });
-                // O Set tiagoSellersToMoveTo08 já foi definido acima
+                const tiagoSellersToMoveTo08 = new Set(['291', '292', '293', '284', '289', '287', '286']);
 
                 const applyTiagoRule = (salesArray) => {
                     return salesArray.map(sale => {
                         // A regra é aplicada se o código do supervisor for 12 E o RCA estiver na lista
                         if (sale.CODSUPERVISOR === '12' && tiagoSellersToMoveTo08.has(sale.CODUSUR)) {
+                            // Correção do spread operator
                             return { ...sale, FILIAL: '08' };
                         }
                         return sale;
@@ -558,6 +466,7 @@
                     data.forEach(row => {
                         if (!row.PEDIDO) return;
                         if (!orders.has(row.PEDIDO)) {
+                            // Correção do spread operator
                             orders.set(row.PEDIDO, {
                                 ...row,
                                 QTVENDA: 0,
@@ -1182,7 +1091,7 @@
             let baseOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false, labels: {color: '#cbd5e1'} }, datalabels: { display: false } }, scales: { y: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255, 255, 255, 0.05)'} }, x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255, 255, 255, 0.05)'} } } };
             let typeDefaults = {};
             if (type === 'bar') typeDefaults = { layout: { padding: { right: 30 } }, plugins: { datalabels: { display: true, anchor: 'end', align: 'end', offset: -4, color: '#cbd5e1', font: { size: 10 }, formatter: (v) => (v > 1000 ? (v/1000).toFixed(1) + 'k' : v.toFixed(0)) } } };
-            if (type === 'doughnut') typeDefaults = { maintainAspectRatio: true, scales: { y: { display: false }, x: { display: false } }, plugins: { legend: { position: 'top', labels: { color: '#cbd5e1' } }, datalabels: { display: true, color: '#fff', font: { size: 11, weight: 'bold' }, formatter: (v, ctx) => { const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0); if(total === 0 || v === 0) return ''; const p = (v / total) * 100; return p > 5 ? p.toFixed(0) + '%' : ''; } } } } };
+            if (type === 'doughnut') typeDefaults = { maintainAspectRatio: true, scales: { y: { display: false }, x: { display: false } }, plugins: { legend: { position: 'top', labels: { color: '#cbd5e1' } }, datalabels: { display: true, color: '#fff', font: { size: 11, weight: 'bold' }, formatter: (v, ctx) => { const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0); if(total === 0 || v === 0) return ''; const p = (v / total) * 100; return p > 5 ? p.toFixed(0) + '%' : ''; } } } };
             const options = mergeDeep(baseOptions, typeDefaults, optionsOverrides);
             charts[canvasId] = new Chart(ctx, { type, data: { labels, datasets: finalDatasets }, options });
         }
@@ -1298,11 +1207,11 @@
             const codcli = codcliFilter.value.trim();
             const selectedFornecedor = fornecedorFilter.value;
 
-            // MODIFICADO: A base de cobertura não filtra mais por rca1 !== rca2
             let clientBaseForCoverage = allClientsData.filter(c => {
                 const rca1 = String(c.rca1 || '').trim();
+                const rca2 = String(c.rca2 || '').trim();
                 const isAmericanas = c.razaoSocial.toUpperCase().includes('AMERICANAS');
-                return rca1 && rca1 !== '53' && !isAmericanas;
+                return rca1 && rca1 !== '53' && rca1 !== rca2 && !isAmericanas;
             });
 
             if (mainRedeGroupFilter === 'com_rede') {
@@ -1678,13 +1587,13 @@
                     const pepsicoTotal = clientSales.filter(s => s.OBSERVACAOFOR === 'PEPSICO').reduce((sum, s) => sum + s.VLVENDA, 0);
                     const multimarcasTotal = clientSales.filter(s => s.OBSERVACAOFOR === 'MULTIMARCAS').reduce((sum, s) => sum + s.VLVENDA, 0);
                     const outrosTotal = totalFaturamentoFiltrado - pepsicoTotal - multimarcasTotal;
+                    // Correção do spread operator
                     salesByActiveClient[codcli] = { ...client, total: totalFaturamentoFiltrado, pepsico: pepsicoTotal, multimarcas: multimarcasTotal, outros: outrosTotal };
                 }
             });
 
             const sortedActiveClients = Object.values(salesByActiveClient).sort((a, b) => b.total - a.total);
             activeClientsForExport = sortedActiveClients;
-            // MODIFICADO: Removida a coluna RCA 2 (data.rcas[1])
             cityActiveDetailTableBody.innerHTML = sortedActiveClients.map(data => {
                 const novoLabel = data.isNew ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
                 let tooltipParts = [];
@@ -1692,7 +1601,7 @@
                 if (data.multimarcas > 0) tooltipParts.push(`MULTIMARCAS: ${data.multimarcas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                 if (data.outros > 0.001) tooltipParts.push(`OUTROS: ${data.outros.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                 const tooltipText = tooltipParts.length > 0 ? tooltipParts.join('<br>') : 'Sem detalhamento de categoria';
-                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['Código']}">${data['Código']}</a></td><td class="px-4 py-2 flex items-center">${data.fantasia || data.razaoSocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${data.cidade}</td><td class="px-4 py-2">${data.bairro}</td><td class="px-4 py-2">${data.rca1 || '-'}</td></tr>`
+                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['Código']}">${data['Código']}</a></td><td class="px-4 py-2 flex items-center">${data.fantasia || data.razaoSocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${data.cidade}</td><td class="px-4 py-2">${data.bairro}</td><td class="px-4 py-2">${data.rcas[0] || '-'}</td><td class="px-4 py-2">${data.rcas[1] || '-'}</td></tr>`
             }).join('');
 
             inactiveClientsList.sort((a, b) => {
@@ -1702,11 +1611,10 @@
                 if (!a.isNewForInactiveLabel && b.isNewForInactiveLabel) return 1;
                 return (parseDate(b.ultimaCompra) || 0) - (parseDate(a.ultimaCompra) || 0);
             });
-            // MODIFICADO: Removida a coluna RCA 2 (client.rcas[1])
             cityInactiveDetailTableBody.innerHTML = inactiveClientsList.map(client => {
                 const novoLabel = client.isNewForInactiveLabel ? `<span class="ml-2 text-xs font-semibold text-purple-400 bg-purple-900/50 px-2 py-0.5 rounded-full">NOVO</span>` : '';
                 const devolucaoLabel = client.isReturn ? `<span class="ml-2 text-xs font-semibold text-red-400 bg-red-900/50 px-2 py-0.5 rounded-full">DEVOLUÇÃO</span>` : '';
-                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['Código']}">${client['Código']}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaoSocial}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimaCompra)}</td><td class="px-4 py-2">${client.rca1 || '-'}</td></tr>`
+                return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${client['Código']}">${client['Código']}</a></td><td class="px-4 py-2 flex items-center">${client.fantasia || client.razaoSocial}${novoLabel}${devolucaoLabel}</td><td class="px-4 py-2">${client.cidade}</td><td class="px-4 py-2">${client.bairro}</td><td class="px-4 py-2 text-center">${formatDate(client.ultimaCompra)}</td><td class="px-4 py-2">${client.rcas[0] || '-'}</td><td class="px-4 py-2">${client.rcas[1] || '-'}</td></tr>`
             }).join('');
 
             const cityChartTitleEl = document.getElementById('city-chart-title');
@@ -2412,7 +2320,7 @@
                     }
                 }
                 const monthlyCurrentTotalFat = monthlyCurrentSales.reduce((sum, item) => sum + item.VLVENDA, 0);
-        
+
                 const salesByMonth = {};
                 historySales.forEach(sale => {
                     const saleDate = parseDate(sale.DTPED);
@@ -3095,7 +3003,7 @@
 
         function updateInnovationsMonthView() {
             const selectedCategory = innovationsMonthCategoryFilter.value;
-            
+
             const { clients: filteredClients } = getInnovationsMonthFilteredData();
 
             const supervisor = innovationsMonthSupervisorFilter.value;
@@ -3123,7 +3031,7 @@
                     categories[categoryName].products.push({ ...item, Codigo: productCode });
                 });
             }
-            
+
             const allCategories = Object.keys(categories).sort();
             const currentFilterValue = innovationsMonthCategoryFilter.value;
             innovationsMonthCategoryFilter.innerHTML = '<option value="">Todas as Categorias</option>';
@@ -3147,12 +3055,12 @@
 
             const categoryAnalysis = {};
             let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
-            
+
             const clientsWhoGotAnyVisibleProductCurrent = new Set();
             const clientsWhoGotAnyVisibleProductPrevious = new Set();
             const clientsWhoGotBonusAnyVisibleProductCurrent = new Set();
             const clientsWhoGotBonusAnyVisibleProductPrevious = new Set();
-            
+
             for (const categoryName in categories) {
                  if(selectedCategory && categoryName !== selectedCategory) continue;
 
@@ -3173,7 +3081,7 @@
                         clientsCurrentCount++;
                         clientsWhoGotAnyVisibleProductCurrent.add(codcli);
                     }
-                    
+
                     if (currentBonus && [...productCodes].some(p => {
                         const rcasWhoBonused = currentBonus.get(p);
                         return rcasWhoBonused && (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca)));
@@ -3201,7 +3109,7 @@
                         clientsWhoGotBonusAnyVisibleProductPrevious.add(codcli);
                     }
                 });
-                
+
                 const coverageCurrent = activeClientsCount > 0 ? (clientsCurrentCount / activeClientsCount) * 100 : 0;
 
                 if (!selectedCategory && coverageCurrent > topCoverageItem.coverage) {
@@ -3209,7 +3117,7 @@
                 }
 
                 const coveragePrevious = activeClientsCount > 0 ? (clientsPreviousCount / activeClientsCount) * 100 : 0;
-                
+
                 const variation = coveragePrevious > 0 ? ((coverageCurrent - coveragePrevious) / coveragePrevious) * 100 : (coverageCurrent > 0 ? Infinity : 0);
 
                 categoryAnalysis[categoryName] = {
@@ -3222,7 +3130,7 @@
 
             if (selectedCategory && categories[selectedCategory]) {
                 const productsInCategory = categories[selectedCategory].products;
-                topCoverageItem = { name: '-', coverage: 0, clients: 0 }; 
+                topCoverageItem = { name: '-', coverage: 0, clients: 0 };
 
                 productsInCategory.forEach(product => {
                     const productCode = product.Codigo;
@@ -3230,7 +3138,7 @@
                     activeClientCodes.forEach(codcli => {
                         const currentSales = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
                         const currentBonus = innovationsMonthIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(codcli) : null;
-                        
+
                         let gotIt = false;
                         if (currentSales && currentSales.has(productCode)) {
                              const rcasWhoSold = currentSales.get(productCode);
@@ -3239,44 +3147,44 @@
                              }
                         }
                         if (!gotIt && currentBonus && currentBonus.has(productCode)) {
-                            // CORREÇÃO: Usar a variável correta 'productCode'
-                            const rcasWhoBonused = currentBonus.get(productCode); 
+                            // Correção aqui: era 'p', deveria ser 'productCode'
+                            const rcasWhoBonused = currentBonus.get(productCode);
                             if (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca))) {
                                 gotIt = true;
                             }
                         }
                         if(gotIt) clientsWhoGotProduct++;
                     });
-                    
+
                     const coverage = activeClientsCount > 0 ? (clientsWhoGotProduct / activeClientsCount) * 100 : 0;
                     if (coverage > topCoverageItem.coverage) {
                         topCoverageItem = { name: `(${productCode}) ${product.Produto}`, coverage: coverage, clients: clientsWhoGotProduct };
                     }
                 });
             }
-            
+
             const selectionCoveredCountCurrent = clientsWhoGotAnyVisibleProductCurrent.size;
             const selectionCoveragePercentCurrent = activeClientsCount > 0 ? (selectionCoveredCountCurrent / activeClientsCount) * 100 : 0;
             const selectionCoveredCountPrevious = clientsWhoGotAnyVisibleProductPrevious.size;
             const selectionCoveragePercentPrevious = activeClientsCount > 0 ? (selectionCoveredCountPrevious / activeClientsCount) * 100 : 0;
-            
+
             const bonusCoveredCountCurrent = clientsWhoGotBonusAnyVisibleProductCurrent.size;
             const bonusCoveragePercentCurrent = activeClientsCount > 0 ? (bonusCoveredCountCurrent / activeClientsCount) * 100 : 0;
             const bonusCoveredCountPrevious = clientsWhoGotBonusAnyVisibleProductPrevious.size;
             const bonusCoveragePercentPrevious = activeClientsCount > 0 ? (bonusCoveredCountPrevious / activeClientsCount) * 100 : 0;
-            
+
             innovationsMonthActiveClientsKpi.textContent = activeClientsCount.toLocaleString('pt-BR');
             innovationsMonthTopCoverageValueKpi.textContent = `${topCoverageItem.coverage.toFixed(2)}%`;
             innovationsMonthTopCoverageKpi.textContent = topCoverageItem.name;
             innovationsMonthTopCoverageKpi.title = topCoverageItem.name;
             innovationsMonthTopCoverageCountKpi.textContent = `${topCoverageItem.clients.toLocaleString('pt-BR')} PDVs`;
             document.getElementById('innovations-month-top-coverage-title').textContent = selectedCategory ? 'Produto com Maior Cobertura' : 'Categoria com Maior Cobertura';
-            
+
             innovationsMonthSelectionCoverageValueKpi.textContent = `${selectionCoveragePercentCurrent.toFixed(2)}%`;
             innovationsMonthSelectionCoverageCountKpi.textContent = `${selectionCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
             innovationsMonthSelectionCoverageValueKpiPrevious.textContent = `${selectionCoveragePercentPrevious.toFixed(2)}%`;
             innovationsMonthSelectionCoverageCountKpiPrevious.textContent = `${selectionCoveredCountPrevious.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
-            
+
             innovationsMonthBonusCoverageValueKpi.textContent = `${bonusCoveragePercentCurrent.toFixed(2)}%`;
             innovationsMonthBonusCoverageCountKpi.textContent = `${bonusCoveredCountCurrent.toLocaleString('pt-BR')} de ${activeClientsCount.toLocaleString('pt-BR')} clientes`;
             innovationsMonthBonusCoverageValueKpiPrevious.textContent = `${bonusCoveragePercentPrevious.toFixed(2)}%`;
@@ -3293,7 +3201,7 @@
                 ], {
                     plugins: {
                         legend: { display: true, position: 'top' },
-                        datalabels: { 
+                        datalabels: {
                             anchor: 'end',
                             align: 'top',
                             offset: 8,
@@ -3318,43 +3226,43 @@
             } else {
                 showNoDataMessage('innovations-month-chart', 'Sem dados de inovações para exibir com os filtros atuais.');
             }
-            
+
             const tableData = [];
             const activeStockMap = getActiveStockMap(innovationsMonthFilialFilter.value);
 
             chartLabels.forEach(categoryName => {
                 const categoryData = categories[categoryName];
-                
+
                 categoryData.products.forEach((product) => {
                     const productCode = product.Codigo;
                     const productName = product.Produto;
-                    
+
                     const stock = activeStockMap.get(productCode) || 0;
-                    
+
                     let clientsCurrentCount = 0;
                     let clientsPreviousCount = 0;
 
                     activeClientCodes.forEach(codcli => {
                          const currentSales = optimizedData.salesByClientAndRca_CurrentMonth.get(codcli);
                          const currentBonus = innovationsMonthIncludeBonus ? optimizedData.bonificationsByClientAndRca_CurrentMonth.get(codcli) : null;
-                         if((currentSales && currentSales.has(productCode) && (sellerRcaCodes.size === 0 || [...currentSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) || 
+                         if((currentSales && currentSales.has(productCode) && (sellerRcaCodes.size === 0 || [...currentSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) ||
                             (currentBonus && currentBonus.has(productCode) && (sellerRcaCodes.size === 0 || [...currentBonus.get(productCode)].some(rca => sellerRcaCodes.has(rca))))) {
                                 clientsCurrentCount++;
                          }
 
                          const previousSales = optimizedData.salesByClientAndRca_PreviousMonth.get(codcli);
                          const previousBonus = innovationsMonthIncludeBonus ? optimizedData.bonificationsByClientAndRca_PreviousMonth.get(codcli) : null;
-                         if((previousSales && previousSales.has(productCode) && (sellerRcaCodes.size === 0 || [...previousSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) || 
+                         if((previousSales && previousSales.has(productCode) && (sellerRcaCodes.size === 0 || [...previousSales.get(productCode)].some(rca => sellerRcaCodes.has(rca)))) ||
                            (previousBonus && previousBonus.has(productCode) && (sellerRcaCodes.size === 0 || [...previousBonus.get(productCode)].some(rca => sellerRcaCodes.has(rca))))) {
                             clientsPreviousCount++;
                          }
                     });
-                    
+
                     const coverageCurrent = activeClientsCount > 0 ? (clientsCurrentCount / activeClientsCount) * 100 : 0;
                     const coveragePrevious = activeClientsCount > 0 ? (clientsPreviousCount / activeClientsCount) * 100 : 0;
-                    
+
                     const variation = coveragePrevious > 0 ? ((coverageCurrent - coveragePrevious) / coveragePrevious) * 100 : (coverageCurrent > 0 ? Infinity : 0);
-                    
+
                     tableData.push({
                         categoryName,
                         productCode,
@@ -3370,7 +3278,7 @@
             });
 
             tableData.sort((a,b) => b.coverageCurrent - a.coverageCurrent);
-            
+
             innovationsMonthTableDataForExport = tableData;
 
             innovationsMonthTableBody.innerHTML = tableData.map(item => {
@@ -3399,11 +3307,11 @@
                     </tr>
                 `;
             }).join('');
-            
+
             const innovationsByClientTableHead = document.getElementById('innovations-by-client-table-head');
             const innovationsByClientTableBody = document.getElementById('innovations-by-client-table-body');
             const innovationsByClientLegend = document.getElementById('innovations-by-client-legend');
-            
+
             const categoryNames = Object.keys(categories).sort();
             categoryLegendForExport = categoryNames.map((name, index) => `${index + 1} - ${name}`);
             innovationsByClientLegend.innerHTML = `<strong>Legenda:</strong> ${categoryLegendForExport.join('; ')}`;
@@ -3449,7 +3357,7 @@
                 }
                 return bairroA.localeCompare(bairroB);
             });
-            
+
             innovationsByClientForExport = clientInnovationStatus;
 
             let tableBodyHTML = '';
@@ -3472,7 +3380,7 @@
             });
             innovationsByClientTableBody.innerHTML = tableBodyHTML;
         }
-        
+
         async function exportInnovationsMonthPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape');
@@ -3489,7 +3397,7 @@
             doc.setFontSize(10);
             doc.setTextColor(100);
             doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
-            
+
             let filterText = `Filtros Aplicados: Supervisor: ${supervisor} | Vendedor: ${vendedor} | Filial: ${filial} | Cidade: ${cidade} | Categoria: ${categoria}`;
             const splitFilters = doc.splitTextToSize(filterText, 270);
             doc.text(splitFilters, 14, 36);
@@ -3509,7 +3417,7 @@
 
             const head = [['Categoria', 'Produto', 'Estoque', 'Cob. Mês Ant.', 'Cob. Mês Atual', 'Variação']];
             const body = [];
-            
+
             innovationsMonthTableDataForExport.forEach(item => {
                 let variationContent;
                 if (isFinite(item.variation)) {
@@ -3554,7 +3462,7 @@
                 doc.setTextColor(100);
                 doc.text(`Data de Emissão: ${generationDate}`, 14, 30);
                 doc.text(splitFilters, 14, 36);
-                
+
                 const legendText = `Legenda: ${categoryLegendForExport.join('; ')}`;
                 const splitLegend = doc.splitTextToSize(legendText, 270);
                 doc.text(splitLegend, 14, 42);
@@ -3571,7 +3479,7 @@
                     categoryLegendForExport.forEach((cat, index) => {
                         const catName = cat.split(' - ')[1];
                         const status = client.innovationStatus[catName];
-                        
+
                         // Célula com conteúdo e estilo
                         const cell = {
                             content: status ? 'S' : 'N',
@@ -3602,13 +3510,13 @@
                     alternateRowStyles: { fillColor: [240, 248, 255] },
                 });
             }
-            
+
             const pageCount = doc.internal.getNumberOfPages();
-            for(let i = 1; i <= pageCount; i++) { 
-                doc.setPage(i); 
-                doc.setFontSize(9); 
-                doc.setTextColor(150); 
-                doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' }); 
+            for(let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(9);
+                doc.setTextColor(150);
+                doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' });
             }
 
             const fileNameParam = vendedor.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'geral';
@@ -3618,7 +3526,7 @@
 
         function renderKpiCards(kpis) {
             const container = document.getElementById('comparison-kpi-container');
-            
+
             const formatValue = (val, format) => {
                 if (format === 'currency') return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                 if (format === 'decimal') return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -3629,7 +3537,7 @@
             container.innerHTML = kpis.map(kpi => {
                 const variation = kpi.history > 0 ? ((kpi.current - kpi.history) / kpi.history) * 100 : (kpi.current > 0 ? 100 : 0);
                 const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400';
-                
+
                 return `<div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
                             <p class="text-slate-400 text-sm">${kpi.title}</p>
                             <p class="text-2xl font-bold text-white my-2">${formatValue(kpi.current, kpi.format)}</p>
@@ -3638,7 +3546,7 @@
                         </div>`;
             }).join('');
         }
-        
+
         function openModal(pedidoId) {
             const orderInfo = aggregatedOrders.find(order => order.PEDIDO == pedidoId);
             const itemsDoPedido = allSalesData.filter(item => item.PEDIDO == pedidoId);
@@ -3656,11 +3564,10 @@
             let finalAddress = clientData.endereco || 'N/A';
             const number = clientData.numero || 'SN';
             if (number !== 'SN' && finalAddress !== 'N/A' && !finalAddress.includes(number)) finalAddress += `, ${number}`;
-            // MODIFICADO: Removido o campo RCA 2
-            clientModalContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"><div><p class="font-bold text-slate-400">Código:</p><p>${clientData['Código'] || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CNPJ/CPF:</p><p>${clientData.cnpj_cpf || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Insc. Est. / Produtor:</p><p>${clientData.inscricaoEstadual || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Razão Social:</p><p>${clientData.razaoSocial || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Nome Fantasia:</p><p>${clientData.fantasia || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Endereço:</p><p>${finalAddress}</p></div><div><p class="font-bold text-slate-400">Bairro:</p><p>${clientData.bairro || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Cidade:</p><p>${clientData.cidade || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CEP:</p><p>${clientData.cep || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Telefone:</p><p>${clientData.telefone || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">E-mail:</p><p>${clientData.email || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Ramo de Atividade:</p><p>${clientData.ramo || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Última Compra:</p><p>${formatDate(clientData.ultimaCompra)}</p></div><div><p class="font-bold text-slate-400">RCA:</p><p>${clientData.rca1 || 'N/A'}</p></div></div>`;
+            clientModalContent.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm"><div><p class="font-bold text-slate-400">Código:</p><p>${clientData['Código'] || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CNPJ/CPF:</p><p>${clientData.cnpj_cpf || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Insc. Est. / Produtor:</p><p>${clientData.inscricaoEstadual || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Razão Social:</p><p>${clientData.razaoSocial || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Nome Fantasia:</p><p>${clientData.fantasia || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">Endereço:</p><p>${finalAddress}</p></div><div><p class="font-bold text-slate-400">Bairro:</p><p>${clientData.bairro || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Cidade:</p><p>${clientData.cidade || 'N/A'}</p></div><div><p class="font-bold text-slate-400">CEP:</p><p>${clientData.cep || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Telefone:</p><p>${clientData.telefone || 'N/A'}</p></div><div class="md:col-span-2"><p class="font-bold text-slate-400">E-mail:</p><p>${clientData.email || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Ramo de Atividade:</p><p>${clientData.ramo || 'N/A'}</p></div><div><p class="font-bold text-slate-400">Última Compra:</p><p>${formatDate(clientData.ultimaCompra)}</p></div></div>`;
             clientModal.classList.remove('hidden');
         }
-        
+
         function exportClientsPDF(clientList, title, filename, includeFaturamento) {
              if (clientList.length === 0) return;
             const { jsPDF } = window.jspdf; const doc = new jsPDF();
@@ -3672,10 +3579,9 @@
             doc.text(`Período de Análise: ${firstDay} a ${lastDay}`, 14, 32);
             doc.text(`Supervisor: ${supervisor}`, 14, 38); doc.text(`Vendedor: ${vendedor}`, 14, 44);
             doc.text(`Data de Emissão: ${generationDate}`, 14, 50);
-            // MODIFICADO: Removida a coluna RCA 2
-            const tableColumn = ["Código", "Cliente", "Bairro", "Cidade", "Últ. Compra", "RCA"];
+            const tableColumn = ["Código", "Cliente", "Bairro", "Cidade", "Últ. Compra"];
             if (includeFaturamento) tableColumn.splice(2, 0, "Faturamento");
-            
+
             clientList.sort((a, b) => {
                 const cidadeA = a.cidade || '';
                 const cidadeB = b.cidade || '';
@@ -3690,8 +3596,7 @@
 
             const tableRows = [];
             clientList.forEach(client => {
-                 // MODIFICADO: Removida a coluna RCA 2
-                const clientData = [ client['Código'] || '', client.fantasia || client.razaoSocial || '', client.bairro || '', client.cidade || '', formatDate(client.ultimaCompra) || 'N/A', client.rca1 || '-' ];
+                const clientData = [ client['Código'] || '', client.fantasia || client.razaoSocial || '', client.bairro || '', client.cidade || '', formatDate(client.ultimaCompra) || 'N/A' ];
                 if (includeFaturamento) clientData.splice(2, 0, (client.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
                 tableRows.push(clientData);
             });
@@ -3704,7 +3609,7 @@
 
         function renderCalendar(year, month) {
             const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-            
+
             let calendarHTML = `
                 <div class="flex justify-between items-center mb-4">
                     <button id="prev-month-btn" class="p-2 rounded-full hover:bg-slate-600">&lt;</button>
@@ -3738,7 +3643,7 @@
             calendarHTML += `</div>`;
             calendarContainer.innerHTML = calendarHTML;
         }
-        
+
         function initializeRedeFilters() {
             const hasRedeData = allClientsData.some(client => client.ramo && client.ramo !== 'N/A');
 
@@ -3755,6 +3660,7 @@
 
         function debounce(func, delay = 300) {
             let timeout;
+            // Correção da função debounce
             return function(...args) {
                 clearTimeout(timeout);
                 timeout = setTimeout(() => {
@@ -3767,14 +3673,14 @@
             viewTableBtn.addEventListener('click', () => { chartView.classList.add('hidden'); tableView.classList.remove('hidden'); viewTableBtn.classList.add('hidden'); viewChartBtn.classList.remove('hidden'); updateAllVisuals(); });
             viewChartBtn.addEventListener('click', () => { tableView.classList.add('hidden'); chartView.classList.remove('hidden'); viewChartBtn.classList.add('hidden'); viewTableBtn.classList.remove('hidden'); updateAllVisuals(); });
             viewComparisonBtn.addEventListener('click', () => { mainDashboard.classList.add('hidden'); comparisonView.classList.remove('hidden'); updateAllComparisonFilters(); updateComparisonView(); });
-            viewStockBtn.addEventListener('click', () => { mainDashboard.classList.add('hidden'); stockView.classList.remove('hidden'); handleStockFilterChange(); }); 
+            viewStockBtn.addEventListener('click', () => { mainDashboard.classList.add('hidden'); stockView.classList.remove('hidden'); handleStockFilterChange(); });
             showCityBtn.addEventListener('click', () => { resetMainFilters(); mainDashboard.classList.add('hidden'); cityView.classList.remove('hidden'); document.getElementById('city-view-content').classList.add('hidden'); document.getElementById('city-view-loader').classList.remove('hidden'); setTimeout(() => { populateSupervisors('city-supervisor-filter', allSalesData); selectedCitySellers = updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData); updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData); updateCityView(); document.getElementById('city-view-loader').classList.add('hidden'); document.getElementById('city-view-content').classList.remove('hidden'); }, 10); });
             backToMainFromCityBtn.addEventListener('click', () => { resetCityFilters(); cityView.classList.add('hidden'); mainDashboard.classList.remove('hidden'); updateAllVisuals(); });
             showWeeklyBtn.addEventListener('click', () => { resetMainFilters(); mainDashboard.classList.add('hidden'); weeklyView.classList.remove('hidden'); populateWeeklyFilters(); updateWeeklyView(); });
             backToMainFromWeeklyBtn.addEventListener('click', () => { weeklyView.classList.add('hidden'); mainDashboard.classList.remove('hidden'); currentWeeklyFornecedor = ''; updateAllVisuals(); });
             backToMainFromComparisonBtn.addEventListener('click', () => { comparisonView.classList.add('hidden'); mainDashboard.classList.remove('hidden'); updateAllVisuals(); });
-            backToMainFromStockBtn.addEventListener('click', () => { stockView.classList.add('hidden'); mainDashboard.classList.remove('hidden'); updateAllVisuals(); }); 
-            
+            backToMainFromStockBtn.addEventListener('click', () => { stockView.classList.add('hidden'); mainDashboard.classList.remove('hidden'); updateAllVisuals(); });
+
             supervisorFilter.addEventListener('change', () => { selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateAllVisuals(); });
             fornecedorFilter.addEventListener('change', updateAllVisuals);
             vendedorFilterBtn.addEventListener('click', () => vendedorFilterDropdown.classList.toggle('hidden'));
@@ -3783,7 +3689,7 @@
             codcliFilter.addEventListener('input', (e) => e.target.value = e.target.value.replace(/[^0-9]/g, ''));
             codcliFilter.addEventListener('change', updateAllVisuals);
             clearFiltersBtn.addEventListener('click', resetMainFilters);
-            
+
             mainComRedeBtn.addEventListener('click', () => mainRedeFilterDropdown.classList.toggle('hidden'));
             mainRedeGroupContainer.addEventListener('click', (e) => {
                 if(e.target.closest('button')) {
@@ -3812,7 +3718,7 @@
             citySupervisorFilter.addEventListener('change', () => { selectedCitySellers = []; selectedCitySellers = updateSellerFilter(citySupervisorFilter.value, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData); validateCityFilter(); updateCityView(); });
             cityVendedorFilterBtn.addEventListener('click', () => cityVendedorFilterDropdown.classList.toggle('hidden'));
             cityVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedCitySellers.push(value); else selectedCitySellers = selectedCitySellers.filter(s => s !== value); selectedCitySellers = updateSellerFilter(citySupervisorFilter.value, cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData); validateCityFilter(); updateCityView(); } });
-            
+
             cityComRedeBtn.addEventListener('click', () => cityRedeFilterDropdown.classList.toggle('hidden'));
             cityRedeGroupContainer.addEventListener('click', (e) => {
                 if(e.target.closest('button')) {
@@ -3834,7 +3740,7 @@
                     const { value, checked } = e.target;
                     if (checked) selectedCityRedes.push(value);
                     else selectedCityRedes = selectedCityRedes.filter(r => r !== value);
-                    
+
                     cityRedeGroupFilter = 'com_rede';
                     cityRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
                     cityComRedeBtn.classList.add('active');
@@ -3852,34 +3758,34 @@
             cityNameFilter.addEventListener('focus', () => { const relevantClients = getRelevantClientsForCityFilter(); citySuggestions.classList.remove('manual-hide'); updateCitySuggestions(cityNameFilter, citySuggestions, relevantClients); });
             cityNameFilter.addEventListener('blur', () => setTimeout(() => citySuggestions.classList.add('hidden'), 150));
             cityNameFilter.addEventListener('keydown', (e) => { if (e.key === 'Enter') { citySuggestions.classList.add('hidden', 'manual-hide'); updateCityView(); e.target.blur(); } });
-            
-            document.addEventListener('click', (e) => { 
-                if (!vendedorFilterBtn.contains(e.target) && !vendedorFilterDropdown.contains(e.target)) vendedorFilterDropdown.classList.add('hidden'); 
-                if (!cityVendedorFilterBtn.contains(e.target) && !cityVendedorFilterDropdown.contains(e.target)) cityVendedorFilterDropdown.classList.add('hidden'); 
+
+            document.addEventListener('click', (e) => {
+                if (!vendedorFilterBtn.contains(e.target) && !vendedorFilterDropdown.contains(e.target)) vendedorFilterDropdown.classList.add('hidden');
+                if (!cityVendedorFilterBtn.contains(e.target) && !cityVendedorFilterDropdown.contains(e.target)) cityVendedorFilterDropdown.classList.add('hidden');
                 if (!cityComRedeBtn.contains(e.target) && !cityRedeFilterDropdown.contains(e.target)) cityRedeFilterDropdown.classList.add('hidden');
                 if (!mainComRedeBtn.contains(e.target) && !mainRedeFilterDropdown.contains(e.target)) mainRedeFilterDropdown.classList.add('hidden');
                 if (!comparisonComRedeBtn.contains(e.target) && !comparisonRedeFilterDropdown.contains(e.target)) comparisonRedeFilterDropdown.classList.add('hidden');
-                if (!comparisonVendedorFilterBtn.contains(e.target) && !comparisonVendedorFilterDropdown.contains(e.target)) comparisonVendedorFilterDropdown.classList.add('hidden'); 
-                if (!comparisonSupplierFilterBtn.contains(e.target) && !comparisonSupplierFilterDropdown.contains(e.target)) comparisonSupplierFilterDropdown.classList.add('hidden'); 
+                if (!comparisonVendedorFilterBtn.contains(e.target) && !comparisonVendedorFilterDropdown.contains(e.target)) comparisonVendedorFilterDropdown.classList.add('hidden');
+                if (!comparisonSupplierFilterBtn.contains(e.target) && !comparisonSupplierFilterDropdown.contains(e.target)) comparisonSupplierFilterDropdown.classList.add('hidden');
                 if (!comparisonProductFilterBtn.contains(e.target) && !comparisonProductFilterDropdown.contains(e.target)) comparisonProductFilterDropdown.classList.add('hidden');
                 if (!stockComRedeBtn.contains(e.target) && !stockRedeFilterDropdown.contains(e.target)) stockRedeFilterDropdown.classList.add('hidden');
                 if (!stockVendedorFilterBtn.contains(e.target) && !stockVendedorFilterDropdown.contains(e.target)) stockVendedorFilterDropdown.classList.add('hidden');
                 if (!stockSupplierFilterBtn.contains(e.target) && !stockSupplierFilterDropdown.contains(e.target)) stockSupplierFilterDropdown.classList.add('hidden');
                 if (!stockProductFilterBtn.contains(e.target) && !stockProductFilterDropdown.contains(e.target)) stockProductFilterDropdown.classList.add('hidden');
-                if (e.target.closest('[data-pedido-id]')) { e.preventDefault(); openModal(e.target.closest('[data-pedido-id]').dataset.pedidoId); } 
-                if (e.target.closest('[data-codcli]')) { e.preventDefault(); openClientModal(e.target.closest('[data-codcli]').dataset.codcli); } 
-                if (e.target.closest('#city-suggestions > div')) { cityNameFilter.value = e.target.textContent; citySuggestions.classList.add('hidden'); updateCityView(); } 
-                if (e.target.closest('#comparison-city-suggestions > div')) { comparisonCityFilter.value = e.target.textContent; comparisonCitySuggestions.classList.add('hidden'); updateAllComparisonFilters(); updateComparisonView(); } 
-                else if (!comparisonCityFilter.contains(e.target)) comparisonCitySuggestions.classList.add('hidden'); 
-                if (e.target.closest('#stock-city-suggestions > div')) { stockCityFilter.value = e.target.textContent; stockCitySuggestions.classList.add('hidden'); handleStockFilterChange(); } 
-                else if (!stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden'); 
+                if (e.target.closest('[data-pedido-id]')) { e.preventDefault(); openModal(e.target.closest('[data-pedido-id]').dataset.pedidoId); }
+                if (e.target.closest('[data-codcli]')) { e.preventDefault(); openClientModal(e.target.closest('[data-codcli]').dataset.codcli); }
+                if (e.target.closest('#city-suggestions > div')) { cityNameFilter.value = e.target.textContent; citySuggestions.classList.add('hidden'); updateCityView(); }
+                if (e.target.closest('#comparison-city-suggestions > div')) { comparisonCityFilter.value = e.target.textContent; comparisonCitySuggestions.classList.add('hidden'); updateAllComparisonFilters(); updateComparisonView(); }
+                else if (!comparisonCityFilter.contains(e.target)) comparisonCitySuggestions.classList.add('hidden');
+                if (e.target.closest('#stock-city-suggestions > div')) { stockCityFilter.value = e.target.textContent; stockCitySuggestions.classList.add('hidden'); handleStockFilterChange(); }
+                else if (!stockCityFilter.contains(e.target)) stockCitySuggestions.classList.add('hidden');
             });
 
             fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentFornecedor === fornecedor) { currentFornecedor = ''; btn.classList.remove('active'); } else { currentFornecedor = fornecedor; fornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } populateSupervisors('supervisor-filter', allSalesData); selectedSellers = []; updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); updateAllVisuals(); }); });
             weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(btn => { btn.addEventListener('click', () => { const fornecedor = btn.dataset.fornecedor; if (currentWeeklyFornecedor === fornecedor) { currentWeeklyFornecedor = ''; btn.classList.remove('active'); } else { currentWeeklyFornecedor = fornecedor; weeklyFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); } updateWeeklyView(); }); });
             weeklySupervisorFilter.addEventListener('change', updateWeeklyView);
             clearWeeklyFiltersBtn.addEventListener('click', resetWeeklyFilters);
-            
+
             const handleComparisonFilterChange = () => {
                 updateAllComparisonFilters();
                 updateComparisonView();
@@ -3892,7 +3798,7 @@
             comparisonFornecedorToggleContainer.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') { const fornecedor = e.target.dataset.fornecedor; if (currentComparisonFornecedor === fornecedor) { currentComparisonFornecedor = ''; e.target.classList.remove('active'); } else { currentComparisonFornecedor = fornecedor; comparisonFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); } handleComparisonFilterChange(); } });
             comparisonSupplierFilterBtn.addEventListener('click', () => comparisonSupplierFilterDropdown.classList.toggle('hidden'));
             comparisonSupplierFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox' && e.target.dataset.filterType === 'comparison') { const { value, checked } = e.target; if (checked) selectedComparisonSuppliers.push(value); else selectedComparisonSuppliers = selectedComparisonSuppliers.filter(s => s !== value); handleComparisonFilterChange(); } });
-            
+
             comparisonComRedeBtn.addEventListener('click', () => comparisonRedeFilterDropdown.classList.toggle('hidden'));
             comparisonRedeGroupContainer.addEventListener('click', (e) => {
                 if(e.target.closest('button')) {
@@ -3913,7 +3819,7 @@
                     const { value, checked } = e.target;
                     if (checked) selectedComparisonRedes.push(value);
                     else selectedComparisonRedes = selectedComparisonRedes.filter(r => r !== value);
-                    
+
                     comparisonRedeGroupFilter = 'com_rede';
                     comparisonRedeGroupContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
                     comparisonComRedeBtn.classList.add('active');
@@ -3931,10 +3837,10 @@
                 const { currentSales, historySales } = getComparisonFilteredData({ excludeFilter: 'city' });
                 updateComparisonCitySuggestions([...currentSales, ...historySales]);
             });
-            comparisonCityFilter.addEventListener('change', handleComparisonFilterChange); 
+            comparisonCityFilter.addEventListener('change', handleComparisonFilterChange);
 
             clearComparisonFiltersBtn.addEventListener('click', resetComparisonFilters);
-            
+
             const handleProductFilterChange = (e, selectedArray) => {
                  if (e.target.type === 'checkbox') {
                     const { value, checked } = e.target;
@@ -3965,7 +3871,7 @@
                     updateComparisonProductFilter();
                 }
             });
-            
+
             stockFilialFilter.addEventListener('change', handleStockFilterChange);
             clearStockFiltersBtn.addEventListener('click', resetStockFilters);
             stockFornecedorToggleContainer.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') { const fornecedor = e.target.dataset.fornecedor; if (currentStockFornecedor === fornecedor) { currentStockFornecedor = ''; e.target.classList.remove('active'); } else { currentStockFornecedor = fornecedor; stockFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); } handleStockFilterChange(); } });
@@ -3974,7 +3880,7 @@
             stockVendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedStockSellers.push(value); else selectedStockSellers = selectedStockSellers.filter(s => s !== value); handleStockFilterChange(); } });
             stockSupplierFilterBtn.addEventListener('click', () => stockSupplierFilterDropdown.classList.toggle('hidden'));
             stockSupplierFilterDropdown.addEventListener('change', (e) => { if (e.target.dataset.filterType === 'stock' && e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) { if(!selectedStockSuppliers.includes(value)) selectedStockSuppliers.push(value); } else { selectedStockSuppliers = selectedStockSuppliers.filter(s => s !== value); } handleStockFilterChange(); } });
-            
+
             const debouncedStockCityUpdate = debounce(() => {
                 const cityData = getStockFilteredData({ excludeFilter: 'city' });
                 updateStockCitySuggestions([...cityData.sales, ...cityData.history]);
@@ -3982,7 +3888,7 @@
             stockCityFilter.addEventListener('input', debouncedStockCityUpdate);
             stockCityFilter.addEventListener('focus', debouncedStockCityUpdate);
             stockCityFilter.addEventListener('change', handleStockFilterChange);
-        
+
             stockComRedeBtn.addEventListener('click', () => stockRedeFilterDropdown.classList.toggle('hidden'));
             stockRedeGroupContainer.addEventListener('click', (e) => {
                 if(e.target.closest('button')) {
@@ -4297,8 +4203,10 @@
         initializeOptimizedDataStructures();
         calculateHistoricalBests();
         populateSupervisors('supervisor-filter', allSalesData);
+        // Correção do spread operator
         populateMainSupplierFilter('fornecedor-filter', [...allSalesData, ...allHistoryData]);
         populateSupervisors('city-supervisor-filter', allSalesData);
+        // Correção do spread operator
         populateSupervisors('stock-supervisor-filter', [...allSalesData, ...allHistoryData]);
         updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
         updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
@@ -4313,6 +4221,7 @@
         updateStockSellerFilter();
         updateStockSupplierFilter();
         updateStockProductFilter();
+        // Correção do spread operator
         updateStockCitySuggestions([...allSalesData, ...allHistoryData]);
 
         initializeRedeFilters();
@@ -4393,21 +4302,12 @@
                 });
             });
 
-            // Função para gerar o ficheiro HTML final do relatório
-             function generateReportFile(data) {
-                // Escapa os dados JSON de forma segura
-                const jsonDataString = JSON.stringify(data)
-                                        .replace(/\\/g, '\\\\')
-                                        .replace(/</g, '\\u003c')
-                                        .replace(/>/g, '\\u003e')
-                                        .replace(/`/g, '\\`')
-                                        .replace(/\$/g, '\\$');
-
+            function generateReportFile(data) {
+                const jsonDataString = JSON.stringify(data);
                 const generationDate = new Date().toLocaleString('pt-BR');
-                // Pega a lógica principal do template
+
                 const scriptLogic = document.getElementById('report-logic-script').textContent;
 
-                // Monta o template HTML final
                 const reportTemplate = `
                     <!DOCTYPE html>
                     <html lang="pt-br">
@@ -4443,40 +4343,642 @@
                         </style>
                     </head>
                     <body class="bg-slate-900 text-slate-200 antialiased">
+                        <div id="main-dashboard">
+                            <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+                                <header class="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
+                                    <div class="text-center sm:text-left">
+                                        <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1>
+                                        <p class="text-slate-400 mt-1">Dados atualizados em: ${generationDate}</p>
+                                    </div>
+                                </header>
 
-                        <!-- Todo o HTML do dashboard -->
-                        <div id="main-dashboard"> <!-- Conteúdo... --> </div>
-                        <div id="city-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8"> <!-- Conteúdo... --> </div>
-                        <div id="weekly-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8"> <!-- Conteúdo... --> </div>
-                        <div id="comparison-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8"> <!-- Conteúdo... --> </div>
-                        <div id="stock-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8"> <!-- Conteúdo... --> </div>
-                        <div id="innovations-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8"> <!-- Conteúdo... --> </div>
-                        <div id="innovations-month-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8"> <!-- Conteúdo... --> </div>
-                        <div id="order-details-modal" class="modal-overlay hidden"> <!-- Conteúdo... --> </div>
-                        <div id="client-details-modal" class="modal-overlay hidden"> <!-- Conteúdo... --> </div>
-                        <div id="holiday-modal" class="modal-overlay hidden"> <!-- Conteúdo... --> </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                                    <div class="kpi-card bg-purple-800/50 border-purple-700">
+                                        <h3 class="text-slate-300 font-medium">Volume Tons</h3>
+                                        <p id="total-peso" class="text-4xl font-bold text-white my-2">0,0</p>
+                                    </div>
+                                    <div class="kpi-card bg-rose-800/50 border-rose-700">
+                                        <h3 class="text-slate-300 font-medium">Faturamento R$</h3>
+                                        <p id="total-vendas" class="text-4xl font-bold text-white my-2">R$ 0,00</p>
+                                    </div>
+                                    <div class="kpi-card bg-blue-800/50 border-blue-700">
+                                        <h3 class="text-slate-300 font-medium">SKU/PDV</h3>
+                                        <p id="kpi-sku-pdv" class="text-4xl font-bold text-white my-2">0,0</p>
+                                    </div>
+                                    <div class="kpi-card bg-emerald-800/50 border-emerald-700">
+                                        <h3 class="text-slate-300 font-medium">Cobertura PDVs</h3>
+                                        <p id="kpi-positivacao" class="text-4xl font-bold text-white my-2">0,0%</p>
+                                        <p id="kpi-positivacao-percent" class="text-sm text-slate-400 -mt-1">0 PDVs</p>
+                                    </div>
+                                </div>
 
-                        <!-- Armazena os dados JSON -->
-                        <script id="embedded-data-json" type="application/json">
-                        ${jsonDataString}
-                        <\/script>
+                                <div class="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+                                    <div id="fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2"><button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button><button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button></div>
+                                    <div class="flex gap-2 w-full sm:w-auto"><button id="viewChartBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hidden">Gráficos</button><button id="viewTableBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Pedidos</button><button id="viewComparisonBtn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg">Comparativo</button><button id="viewStockBtn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Estoque</button></div>
+                                </div>
+                                <div id="main-filters" class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+                                        <div id="main-rede-filter-wrapper" class="relative">
+                                            <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
+                                            <div id="main-rede-group-container" class="inline-flex rounded-md shadow-sm" role="group">
+                                                <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-l-lg hover:bg-slate-500">Todos</button>
+                                                <button type="button" data-group="com_rede" id="main-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 hover:bg-slate-500 border-t border-b border-slate-700 flex items-center gap-2">
+                                                    <span id="main-com-rede-btn-text">Com Rede</span>
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                </button>
+                                                <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-r-lg hover:bg-slate-500">Sem Rede</button>
+                                            </div>
+                                            <div id="main-rede-filter-dropdown" class="hidden absolute z-20 w-56 mt-1 top-full left-0 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
+                                        </div>
+                                        <div><label for="supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label><select id="supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todos</option></select></div>
+                                        <div class="relative"><label for="vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label><button id="vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center"><span id="vendedor-filter-text">Todos Vendedores</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div></div>
+                                        <div><label for="fornecedor-filter" class="block mb-2 text-sm font-medium text-slate-300">Fornecedor</label><select id="fornecedor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todos</option></select></div>
+                                        <div><label for="codcli-filter" class="block mb-2 text-sm font-medium text-slate-300">Cód. Cliente</label><input type="text" id="codcli-filter" placeholder="Digite o código..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"></div>
+                                        <div><label for="posicao-filter" class="block mb-2 text-sm font-medium text-slate-300">Posição</label><select id="posicao-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todas</option><option value="L">Liberado</option><option value="M">Montado</option><option value="F">Faturado</option></select></div>
+                                        <div class="md:col-start-6"><button id="clear-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button></div>
+                                    </div>
+                                </div>
+                                <main id="app-container">
+                                    <div id="chartView" class="">
+                                        <div class="mb-6 bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                            <div class="flex justify-between items-center mb-4">
+                                                <div class="w-1/3">
+                                                    <label for="main-holiday-picker-btn" class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label>
+                                                    <button id="main-holiday-picker-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left">Selecionar Feriados</button>
+                                                </div>
+                                                <div class="w-1/3 text-center">
+                                                    <h2 class="text-lg font-semibold text-white">Tendência de Faturamento</h2>
+                                                </div>
+                                                <div class="w-1/3"></div>
+                                            </div>
+                                            <div id="trendChartContainer" class="relative h-80"></div>
+                                        </div>
+                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 id="sales-by-person-title" class="text-lg font-semibold text-white mb-4 text-center">Vendas por Supervisor</h2><div id="salesByPersonChartContainer" class="relative h-80"></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 id="faturamentoPorFornecedorTitle" class="text-lg font-semibold text-white mb-4 text-center">Faturamento por Categoria</h2><div id="faturamentoPorFornecedorChartContainer" class="relative h-80"></div></div></div>
+                                        <div class="mt-6 bg-[#1d2347] p-4 rounded-lg border border-slate-700"><div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white">Vendas por Produto</h2><div class="bg-slate-700 rounded-lg p-1 flex"><button id="faturamentoBtn" class="metric-btn active px-3 py-1 text-sm rounded-md">Faturamento</button><button id="pesoBtn" class="metric-btn px-3 py-1 text-sm rounded-md">Peso Kg</button></div></div><div id="salesByProductBarChartContainer" class="relative h-80"></div></div>
+                                        <div class="mt-6 space-y-3">
+                                            <button id="show-weekly-btn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg">Gráficos Semanais</button>
+                                            <button id="show-city-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg">Gráficos por Cidade</button>
+                                            <button id="viewInnovationsBtn" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-lg">Inovações</button>
+                                        </div>
+                                    </div>
+                                    <div id="tableView" class="hidden"><div class="overflow-x-auto bg-[#1d2347] rounded-lg border border-slate-700" style="max-height: 60vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Nº Pedido</th><th class="px-4 py-3">Cód. Cliente</th><th class="px-4 py-3">Vendedor</th><th class="px-4 py-3">Fornecedor</th><th class="px-4 py-3">Data Pedido</th><th class="px-4 py-3">Data Fat.</th><th class="px-4 py-3 text-right">Peso Total</th><th class="px-4 py-3 text-right">Faturamento Total</th><th class="px-4 py-3 text-center">Posição</th></tr></thead><tbody id="report-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
+                                </main>
+                            </div>
+                        </div>
+                        <div id="city-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+                            <div id="city-view-loader" class="text-center p-16"><p class="text-lg text-slate-400">Carregando dados...</p></div>
+                            <div id="city-view-content" class="hidden">
+                                <div class="flex justify-between items-center mb-6"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Vendas por Cidade</p></div><button id="back-to-main-from-city-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+                                <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                                        <div id="city-rede-filter-wrapper" class="relative">
+                                            <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
+                                            <div id="city-rede-group-container" class="inline-flex rounded-md shadow-sm" role="group">
+                                                <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-l-lg hover:bg-slate-500">Todos</button>
+                                                <div class="relative">
+                                                    <button type="button" data-group="com_rede" id="city-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 hover:bg-slate-500 border-t border-b border-slate-700 flex items-center justify-center gap-2">
+                                                        <span id="city-com-rede-btn-text">Com Rede</span>
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                    </button>
+                                                    <div id="city-rede-filter-dropdown" class="hidden absolute z-20 w-56 mt-1 top-full left-0 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
+                                                </div>
+                                                <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-r-lg hover:bg-slate-500">Sem Rede</button>
+                                            </div>
+                                        </div>
+                                        <div><label for="city-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label><select id="city-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todos</option></select></div>
+                                        <div class="relative"><label for="city-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label><button id="city-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center"><span id="city-vendedor-filter-text">Todos</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="city-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div></div>
+                                        <div class="relative"><label for="city-name-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label><input type="text" id="city-name-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white" autocomplete="off"><div id="city-suggestions" class="absolute z-10 w-full bg-slate-700 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div></div>
+                                        <div><label for="city-codcli-filter" class="block mb-2 text-sm font-medium text-slate-300">Cód. Cliente</label><input type="text" id="city-codcli-filter" placeholder="Digite o código..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"></div>
+                                    </div>
+                                    <div class="mt-4 flex justify-center">
+                                        <button id="clear-city-filters-btn" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><div class="flex justify-between items-center mb-4"><div class="w-1/4"><span class="text-xl font-bold text-cyan-400">Top 10</span></div><div class="w-1/2 text-center"><h2 id="city-chart-title" class="text-lg font-semibold text-white"></h2></div><div class="w-1/4 text-right"><p class="text-slate-400 text-sm">Total Vendido</p><p id="total-faturamento-cidade" class="text-xl font-bold text-emerald-400">R$ 0,00</p></div></div><div id="salesByClientInCityChartContainer" class="relative h-96"></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white mb-4 text-center">Status dos Clientes</h2><div id="customerStatusChartContainer" class="relative h-96 flex items-center justify-center"></div></div></div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg mt-6 border border-slate-700"><div class="flex justify-between items-center mb-4 px-4"><h3 class="text-lg font-semibold text-white">Clientes Ativos no Mês</h3><button id="export-active-pdf-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Exportar Relatório</button></div><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Nome Fantasia</th><th class="px-4 py-3 text-right">Faturamento</th><th class="px-4 py-3">Cidade</th><th class="px-4 py-3">Bairro</th><th class="px-4 py-3">RCA 1</th><th class="px-4 py-3">RCA 2</th></tr></thead><tbody id="city-active-detail-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg mt-6 border border-slate-700"><div class="flex justify-between items-center mb-4 px-4"><h3 class="text-lg font-semibold text-white">Clientes S/ Vendas no Mês</h3><button id="export-inactive-pdf-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Exportar Relatório</button></div><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Nome Fantasia</th><th class="px-4 py-3">Cidade</th><th class="px-4 py-3">Bairro</th><th class="px-4 py-3 text-center">Última Compra</th><th class="px-4 py-3">RCA 1</th><th class="px-4 py-3">RCA 2</th></tr></thead><tbody id="city-inactive-detail-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
+                            </div>
+                        </div>
+                        <div id="weekly-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+                            <div class="flex justify-between items-center mb-6"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Acompanhamento Semanal</p></div><button id="back-to-main-from-weekly-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700"><div class="flex flex-col sm:flex-row justify-between items-center gap-4"><div id="weekly-fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2"><button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button><button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button></div><button id="clear-weekly-filters-btn" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button></div><div class="mt-4"><label class="block text-sm font-medium text-slate-300 mb-2">Filtrar Supervisores</label><div id="weekly-supervisor-filter" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"></div></div></div>
+                            <div class="grid grid-cols-1 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white text-center">Faturamento Mensal por Dia da Semana</h2><div class="text-right"><p class="text-slate-400 text-sm">Total do Mês</p><p id="total-mes-semanal" class="text-xl font-bold text-emerald-400">R$ 0,00</p></div></div><div id="weeklySalesChartContainer" class="relative h-96"></div><div class="mt-6 border-t border-slate-700 pt-4"><h3 class="text-md font-semibold text-white mb-3 text-center">Resumo de Faturamento Semanal</h3><div class="overflow-x-auto"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase"><tr><th class="px-4 py-2 bg-slate-700/50 rounded-l-lg">Semana</th><th class="px-4 py-2 bg-slate-700/50 text-right rounded-r-lg">Faturamento Total</th></tr></thead><tbody id="weekly-summary-table-body" class="divide-y divide-slate-700"></tbody></table></div></div></div><div class="grid grid-cols-1 gap-6"><div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Positivação</h2><div id="positivacaoChartContainer" class="relative h-80"></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Mix de Produtos (Por PDV)</h2><div id="mixChartContainer" class="relative h-80"></div></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white mb-4 text-center">Top 10 Vendedores (Faturamento)</h2><div id="topSellersChartContainer" class="relative h-80"></div></div></div></div>
+                        </div>
+                        <div id="comparison-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+                            <div class="flex justify-between items-center mb-6"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Comparativo entre Meses</p></div><button id="back-to-main-from-comparison-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                                <div id="comparison-rede-filter-wrapper" class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
+                                    <div class="relative w-full sm:w-1/2">
+                                        <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
+                                        <div id="comparison-rede-group-container" class="inline-flex rounded-md shadow-sm w-full" role="group">
+                                            <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-l-lg hover:bg-slate-500 flex-1">Todos</button>
+                                            <button type="button" data-group="com_rede" id="comparison-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 hover:bg-slate-500 border-t border-b border-slate-700 flex items-center justify-center gap-2 flex-1">
+                                                <span id="comparison-com-rede-btn-text">Com Rede</span>
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                            </button>
+                                            <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-r-lg hover:bg-slate-500 flex-1">Sem Rede</button>
+                                        </div>
+                                        <div id="comparison-rede-filter-dropdown" class="hidden absolute z-20 w-full mt-1 top-full left-0 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
+                                    </div>
+                                    <div class="w-full sm:w-1/2">
+                                        <label class="block mb-2 text-sm font-medium text-slate-300">Pasta</label>
+                                        <div id="comparison-fornecedor-toggle-container" class="w-full rounded-lg p-1 flex justify-center gap-2">
+                                            <button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1">PEPSICO</button>
+                                            <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1">MULTIMARCAS</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                    <div>
+                                        <label for="comparison-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
+                                        <select id="comparison-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
+                                            <option value="">Todos</option>
+                                        </select>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="comparison-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label>
+                                        <button id="comparison-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="comparison-vendedor-filter-text">Todos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="comparison-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="comparison-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Fornecedor</label>
+                                        <button id="comparison-supplier-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="comparison-supplier-filter-text">Todos Fornecedores</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="comparison-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="comparison-city-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label>
+                                        <input type="text" id="comparison-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white" autocomplete="off">
+                                        <div id="comparison-city-suggestions" class="absolute z-10 w-full bg-slate-700 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                </div>
 
-                        <!-- Script para ler os dados e iniciar a lógica -->
+                                <div class="grid grid-cols-1 mt-4">
+                                    <div class="relative">
+                                        <label for="comparison-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Filtrar por Produto</label>
+                                        <button id="comparison-product-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="comparison-product-filter-text">Todos os Produtos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="comparison-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg">
+                                            <div class="p-2 border-b border-slate-600">
+                                                <input type="text" id="comparison-product-search-input" placeholder="Buscar produto..." class="bg-slate-800 text-xs rounded-lg block w-full p-2 border border-slate-600 placeholder-slate-400 text-white">
+                                            </div>
+                                            <div id="comparison-product-list" class="max-h-60 overflow-y-auto custom-scrollbar">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end border-t border-slate-700 pt-4 mt-4">
+                                    <div>
+                                        <label for="comparison-filial-filter" class="block mb-2 text-sm font-medium text-slate-300">Filial</label>
+                                        <select id="comparison-filial-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
+                                            <option value="ambas" selected>Ambas</option>
+                                            <option value="05">Filial 05</option>
+                                            <option value="08">Filial 08</option>
+                                        </select>
+                                    </div>
+                                    <div class="flex items-end"><div class="w-full"><label for="comparison-holiday-picker-btn" class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label><button id="comparison-holiday-picker-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left">Selecionar Feriados</button></div></div>
+                                    <button id="comparison-tendency-toggle" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 px-4 rounded-lg">Calcular Tendência</button>
+                                    <button id="clear-comparison-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+                                </div>
+                            </div>
+                            <div id="comparison-kpi-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6"></div>
+                            <div class="grid grid-cols-1 gap-6">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                    <div class="flex justify-center items-center mb-4 relative">
+                                        <h2 id="comparison-chart-title" class="text-lg font-semibold text-white text-center">Comparativo de Faturamento Semanal</h2>
+                                        <div class="absolute right-0 top-0 bottom-0 flex items-center">
+                                            <div id="comparison-chart-toggle" class="flex bg-slate-700 rounded-lg p-1">
+                                                <button id="toggle-weekly-btn" class="comparison-toggle-btn active px-3 py-1 text-sm rounded-md">Semanal</button>
+                                                <button id="toggle-monthly-btn" class="comparison-toggle-btn px-3 py-1 text-sm rounded-md">Mensal</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="weeklyComparisonChartContainer" class="relative h-96"></div>
+                                    <div id="monthlyComparisonChartContainer" class="relative h-96 hidden"></div>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Faturamento por Dia da Semana</h2>
+                                    <div id="dailyWeeklyComparisonChartContainer" class="relative h-96"></div>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white text-center mb-4">Variação de Faturamento por Supervisor</h2><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Supervisor</th><th class="px-4 py-3 text-right">Média Trim.</th><th class="px-4 py-3 text-right">Fat. Mês Atual</th><th class="px-4 py-3 text-right">Variação</th></tr></thead><tbody id="supervisorComparisonTableBody" class="divide-y divide-slate-700"></tbody></table></div></div>
+                            </div>
+                        </div>
+                        <div id="stock-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+                            <div class="flex justify-between items-center mb-6">
+                                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Estoque</p></div>
+                                <button id="back-to-main-from-stock-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
+                            </div>
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                                <div id="stock-rede-filter-wrapper" class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
+                                    <div class="relative w-full sm:w-1/2">
+                                        <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
+                                        <div id="stock-rede-group-container" class="inline-flex rounded-md shadow-sm w-full" role="group">
+                                            <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-l-lg hover:bg-slate-500 flex-1">Todos</button>
+                                            <button type="button" data-group="com_rede" id="stock-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 hover:bg-slate-500 border-t border-b border-slate-700 flex items-center justify-center gap-2 flex-1">
+                                                <span id="stock-com-rede-btn-text">Com Rede</span>
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                            </button>
+                                            <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-r-lg hover:bg-slate-500 flex-1">Sem Rede</button>
+                                        </div>
+                                        <div id="stock-rede-filter-dropdown" class="hidden absolute z-20 w-full mt-1 top-full left-0 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
+                                    </div>
+                                    <div class="w-full sm:w-1/2">
+                                        <label class="block mb-2 text-sm font-medium text-slate-300">Pasta</label>
+                                        <div id="stock-fornecedor-toggle-container" class="w-full rounded-lg p-1 flex justify-center gap-2">
+                                            <button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1">PEPSICO</button>
+                                            <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1">MULTIMARCAS</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                    <div>
+                                        <label for="stock-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
+                                        <select id="stock-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
+                                            <option value="">Todos</option>
+                                        </select>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="stock-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label>
+                                        <button id="stock-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="stock-vendedor-filter-text">Todos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="stock-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="stock-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Fornecedor</label>
+                                        <button id="stock-supplier-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="stock-supplier-filter-text">Todos Fornecedores</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="stock-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="stock-city-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label>
+                                        <input type="text" id="stock-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white" autocomplete="off">
+                                        <div id="stock-city-suggestions" class="absolute z-10 w-full bg-slate-700 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                                    <div class="lg:col-span-2 relative">
+                                        <label for="stock-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Produto</label>
+                                        <button id="stock-product-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="stock-product-filter-text">Todos os Produtos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="stock-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg">
+                                            <div class="p-2 border-b border-slate-600">
+                                                <input type="text" id="stock-product-search-input" placeholder="Buscar produto..." class="bg-slate-800 text-xs rounded-lg block w-full p-2 border border-slate-600 text-white">
+                                            </div>
+                                            <div id="stock-product-list" class="max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label for="stock-filial-filter" class="block mb-2 text-sm font-medium text-slate-300">Filial</label>
+                                        <select id="stock-filial-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
+                                            <option value="ambas" selected>Ambas</option>
+                                            <option value="05">Filial 05</option>
+                                            <option value="08">Filial 08</option>
+                                        </select>
+                                    </div>
+                                    <button id="clear-stock-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+                                </div>
+                            </div>
+                            <div class="bg-[#1d2347] p-4 rounded-lg mb-6 border border-slate-700">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h2 class="text-lg font-semibold text-white">Análise de Estoque e Tendência de Saída</h2>
+                                    <div id="stock-trend-filter-container" class="flex items-center gap-2">
+                                        <button data-trend="all" class="stock-trend-btn active p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-gray-400"></div></button>
+                                        <button data-trend="low" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-red-500"></div></button>
+                                        <button data-trend="medium" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-yellow-500"></div></button>
+                                        <button data-trend="good" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-green-500"></div></button>
+                                    </div>
+                                </div>
+                                <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
+                                    <table class="min-w-full text-sm text-left">
+                                        <thead class="text-xs text-slate-300 uppercase sticky-header">
+                                            <tr>
+                                                <th class="px-4 py-3">Produto</th>
+                                                <th class="px-4 py-3">Fornecedor</th>
+                                                <th class="px-4 py-3 text-right">Estoque Atual (Emb.)</th>
+                                                <th class="px-4 py-3 text-right">Venda Média Mensal (Emb.)</th>
+                                                <th class="px-4 py-3 text-right">Tendência (Dias)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="stock-analysis-table-body" class="divide-y divide-slate-700"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Produtos com Crescimento</h2>
+                                    <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
+                                        <table class="min-w-full text-sm">
+                                            <thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Variação</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead>
+                                            <tbody id="growth-table-body" class="divide-y divide-slate-700"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Produtos com Queda</h2>
+                                    <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
+                                        <table class="min-w-full text-sm">
+                                            <thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Variação</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead>
+                                            <tbody id="decline-table-body" class="divide-y divide-slate-700"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Novos - Vendidos este Mês</h2>
+                                    <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
+                                        <table class="min-w-full text-sm">
+                                            <thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead>
+                                            <tbody id="new-products-table-body" class="divide-y divide-slate-700"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                    <h2 class="text-lg font-semibold text-white text-center mb-4">Perdidos - Não vendidos este Mês</h2>
+                                    <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
+                                        <table class="min-w-full text-sm">
+                                            <thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead>
+                                            <tbody id="lost-products-table-body" class="divide-y divide-slate-700"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="innovations-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+                            <div class="flex justify-between items-center mb-6">
+                                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Inovações</p></div>
+                                <div class="flex gap-4">
+                                    <button id="innovations-month-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Inovações Mês</button>
+                                    <button id="back-to-main-from-innovations-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
+                                </div>
+                            </div>
+
+                             <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p>
+                                    <p id="innovations-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p>
+                                    <p class="text-xs text-slate-500">Base para os KPIs</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p>
+                                    <p id="innovations-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
+                                    <p id="innovations-selection-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p>
+                                    <p id="innovations-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
+                                    <p id="innovations-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Ant.</p>
+                                    <p id="innovations-bonus-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
+                                    <p id="innovations-bonus-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Atual</p>
+                                    <p id="innovations-bonus-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
+                                    <p id="innovations-bonus-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p id="innovations-top-coverage-title" class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p>
+                                    <p id="innovations-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p>
+                                    <p id="innovations-top-coverage-product-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p>
+                                    <p id="innovations-top-coverage-count-kpi" class="text-xs text-slate-500">0 PDVs</p>
+                                </div>
+                            </div>
+
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                                    <div>
+                                        <label for="innovations-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
+                                        <select id="innovations-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white">
+                                            <option value="">Todos</option>
+                                        </select>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="innovations-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label>
+                                        <button id="innovations-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="innovations-vendedor-filter-text">Todos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="innovations-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="innovations-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Fornecedor</label>
+                                        <button id="innovations-supplier-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="innovations-supplier-filter-text">Todos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="innovations-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="innovations-city-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label>
+                                        <input type="text" id="innovations-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white" autocomplete="off">
+                                        <div id="innovations-city-suggestions" class="absolute z-10 w-full bg-slate-700 border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                     <div>
+                                        <label for="innovations-filial-filter" class="block mb-2 text-sm font-medium text-slate-300">Filial</label>
+                                        <select id="innovations-filial-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
+                                            <option value="ambas" selected>Ambas</option>
+                                            <option value="05">Filial 05</option>
+                                            <option value="08">Filial 08</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                                    <div class="lg:col-span-2 relative">
+                                        <label for="innovations-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Produto (Obrigatório)</label>
+                                        <button id="innovations-product-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="innovations-product-filter-text">Selecione um ou mais produtos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="innovations-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg">
+                                            <div class="p-2 border-b border-slate-600"><input type="text" id="innovations-product-search-input" placeholder="Buscar produto..." class="bg-slate-800 text-xs rounded-lg block w-full p-2 border border-slate-600 text-white"></div>
+                                            <div id="innovations-product-list" class="max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                        </div>
+                                    </div>
+                                     <div class="flex items-center justify-start h-full pb-1">
+                                        <div class="flex items-center">
+                                            <input id="innovations-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2">
+                                            <label for="innovations-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label>
+                                        </div>
+                                    </div>
+                                    <button id="clear-innovations-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+                                </div>
+                            </div>
+
+                            <div id="innovations-table-container" class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                <div id="innovations-placeholder" class="text-center py-16">
+                                    <p class="text-slate-500 text-lg">Aguardando filtro de produtos...</p>
+                                </div>
+                                <div id="innovations-results" class="hidden overflow-auto custom-scrollbar" style="max-height: 60vh;">
+                                    <table class="min-w-full text-sm text-left">
+                                        <thead class="text-xs text-slate-300 uppercase sticky-header">
+                                            <tr>
+                                                <th class="px-2 py-2">PRODUTO</th>
+                                                <th class="px-2 py-2 text-right">ESTOQUE CAIXAS</th>
+                                                <th class="px-2 py-2 text-right">COBERTURA MÊS ANT.</th>
+                                                <th class="px-2 py-2 text-right">COBERTURA MÊS ATUAL</th>
+                                                <th class="px-2 py-2 text-right">VARIAÇÃO</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="innovations-table-body" class="divide-y divide-slate-700"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="innovations-month-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+                            <div class="flex justify-between items-center mb-6">
+                                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Gráfico de Cobertura por Categoria de Inovação</p></div>
+                                <div class="flex gap-4">
+                                    <button id="export-innovations-month-pdf-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Exportar PDF</button>
+                                    <button id="back-to-innovations-from-month-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar</button>
+                                </div>
+                            </div>
+                             <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p>
+                                    <p id="innovations-month-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p>
+                                    <p class="text-xs text-slate-500">Base para os KPIs</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p>
+                                    <p id="innovations-month-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
+                                    <p id="innovations-month-selection-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p>
+                                    <p id="innovations-month-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
+                                    <p id="innovations-month-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Ant.</p>
+                                    <p id="innovations-month-bonus-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
+                                    <p id="innovations-month-bonus-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Atual</p>
+                                    <p id="innovations-month-bonus-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
+                                    <p id="innovations-month-bonus-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
+                                </div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                    <p id="innovations-month-top-coverage-title" class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p>
+                                    <p id="innovations-month-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p>
+                                    <p id="innovations-month-top-coverage-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p>
+                                    <p id="innovations-month-top-coverage-count-kpi" class="text-xs text-slate-500">0 PDVs</p>
+                                </div>
+                            </div>
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+                                    <div>
+                                        <label for="innovations-month-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
+                                        <select id="innovations-month-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white">
+                                            <option value="">Todos</option>
+                                        </select>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="innovations-month-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label>
+                                        <button id="innovations-month-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
+                                            <span id="innovations-month-vendedor-filter-text">Todos</span>
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
+                                        <div id="innovations-month-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                    <div class="relative">
+                                        <label for="innovations-month-city-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label>
+                                        <input type="text" id="innovations-month-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white" autocomplete="off">
+                                        <div id="innovations-month-city-suggestions" class="absolute z-10 w-full bg-slate-700 border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
+                                    </div>
+                                     <div>
+                                        <label for="innovations-month-filial-filter" class="block mb-2 text-sm font-medium text-slate-300">Filial</label>
+                                        <select id="innovations-month-filial-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
+                                            <option value="ambas" selected>Ambas</option>
+                                            <option value="05">Filial 05</option>
+                                            <option value="08">Filial 08</option>
+                                        </select>
+                                    </div>
+                                     <div class="flex items-center justify-start h-full pb-1">
+                                        <div class="flex items-center">
+                                            <input id="innovations-month-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2">
+                                            <label for="innovations-month-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label>
+                                        </div>
+                                    </div>
+                                    <button id="clear-innovations-month-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+                                </div>
+                                <div class="mt-4 border-t border-slate-700 pt-4">
+                                    <label for="innovations-month-category-filter" class="block mb-2 text-sm font-medium text-slate-300">Filtrar por Categoria de Inovação</label>
+                                    <select id="innovations-month-category-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
+                                        <option value="">Todas as Categorias</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 mb-6">
+                                <div id="innovations-month-chartContainer" class="relative h-96"></div>
+                            </div>
+                             <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 mb-6">
+                                <h2 class="text-lg font-semibold text-white mb-4 text-center">Dados do Gráfico</h2>
+                                <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
+                                    <table class="min-w-full text-sm text-left">
+                                        <thead class="text-xs text-slate-300 uppercase sticky-header">
+                                            <tr>
+                                                <th class="px-2 py-2">CATEGORIA</th>
+                                                <th class="px-2 py-2">PRODUTO</th>
+                                                <th class="px-2 py-2 text-right">ESTOQUE CAIXAS</th>
+                                                <th class="px-2 py-2 text-right">COBERTURA MÊS ANT.</th>
+                                                <th class="px-2 py-2 text-right">COBERTURA MÊS ATUAL</th>
+                                                <th class="px-2 py-2 text-right">VARIAÇÃO</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="innovations-month-table-body" class="divide-y divide-slate-700"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                <h2 class="text-lg font-semibold text-white mb-2 text-center">Inovações por cliente</h2>
+                                <div id="innovations-by-client-legend" class="text-xs text-slate-400 mb-4 p-2 bg-slate-800 rounded"></div>
+                                <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
+                                    <table class="min-w-full text-sm text-left">
+                                        <thead id="innovations-by-client-table-head" class="text-xs text-slate-300 uppercase sticky-header">
+                                        </thead>
+                                        <tbody id="innovations-by-client-table-body" class="divide-y divide-slate-700"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="order-details-modal" class="modal-overlay hidden"><div class="bg-slate-800 rounded-lg shadow-2xl max-w-4xl w-full m-4"><div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Detalhes do Pedido <span id="modal-pedido-id"></span></h2><button id="modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button></div><div id="modal-header-info" class="p-6 text-left grid grid-cols-2 md:grid-cols-3 gap-4 text-sm"></div><div class="custom-scrollbar" style="max-height: 50vh; overflow-y: auto;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Produto</th><th class="px-4 py-3 text-right">Quantidade</th><th class="px-4 py-3 text-right">Peso (Kg)</th><th class="px-4 py-3 text-right">Valor Unitário</th></tr></thead><tbody id="modal-table-body" class="divide-y divide-slate-700"></tbody></table></div><div id="modal-footer-total" class="p-6 border-t border-slate-700 flex justify-between items-center"></div></div></div>
+                        <div id="client-details-modal" class="modal-overlay hidden"><div class="bg-slate-800 rounded-lg shadow-2xl max-w-2xl w-full m-4"><div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Resumo Cadastral</h2><button id="client-modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button></div><div id="client-modal-content" class="p-6"></div></div></div>
+                        <div id="holiday-modal" class="modal-overlay hidden">
+                            <div class="bg-slate-800 rounded-lg shadow-2xl max-w-xs w-full m-4">
+                                <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+                                    <h2 class="text-lg font-bold text-white">Selecionar Feriados</h2>
+                                    <button id="holiday-modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button>
+                                </div>
+                                <div class="p-4">
+                                    <div id="calendar-container"></div>
+                                </div>
+                                <div class="p-4 border-t border-slate-700 text-right">
+                                    <button id="holiday-modal-done-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Confirmar</button>
+                                </div>
+                            </div>
+                        </div>
                         <script>
-                            let embeddedData;
-                            try {
-                                embeddedData = JSON.parse(document.getElementById('embedded-data-json').textContent);
-                                document.addEventListener('DOMContentLoaded', initializeDashboardLogic);
-                            } catch (parseError) {
-                                console.error('Erro ao parsear os dados embutidos (JSON inválido):', parseError);
-                                document.body.innerHTML = '<div style="color: red; padding: 20px;"><h1>Erro Crítico</h1><p>Falha ao carregar os dados processados (JSON inválido). Verifique o console para detalhes.</p></div>';
-                            }
-
-                            // Função que executa a lógica principal do dashboard
-                            // REMOVIDO TRY...CATCH INTERNO para debug
-                            function initializeDashboardLogic() {
+                            const embeddedData = ${jsonDataString};
+                            document.addEventListener('DOMContentLoaded', () => {
                                 ${scriptLogic}
-                            }
+                            });
                         <\/script>
                     </body>
                     </html>
@@ -4492,5 +4994,7 @@
     </script>
 </body>
 </html>
+
+
 
 
