@@ -9,14 +9,14 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0d1126; /* Cor de fundo principal */
+            background-color: #0d1126;
         }
         .file-input-label {
             display: block;
             text-align: left;
             font-size: 0.875rem;
             font-weight: 500;
-            color: #94a3b8; /* cinza-azulado claro */
+            color: #94a3b8;
             margin-bottom: 0.5rem;
         }
         .progress-bar-container {
@@ -25,7 +25,7 @@
             overflow: hidden;
         }
         .progress-bar {
-            background-color: #2dd4bf; /* Verde esmeralda */
+            background-color: #2dd4bf;
             height: 100%;
             transition: width 0.3s ease-in-out;
         }
@@ -34,7 +34,6 @@
             outline-offset: 2px;
             transform: scale(1.1);
         }
-        /* Estilo básico para tooltip */
         .tooltip { position: relative; display: inline-block; cursor: pointer; }
         .tooltip .tooltip-text { visibility: hidden; width: auto; min-width: 80px; background-color: #1e293b; color: #fff; text-align: center; border-radius: 6px; padding: 5px 8px; position: absolute; z-index: 1001; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
         .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
@@ -87,10 +86,8 @@
     </div>
 
     <script id="worker-script" type="text/worker-javascript">
-        // Importa a biblioteca para ler arquivos XLSX
         self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
 
-        // Função para parsear datas (executada dentro do worker)
         function parseDate(dateString) {
             if (!dateString) return null;
             if (dateString instanceof Date) return !isNaN(dateString.getTime()) ? dateString : null;
@@ -107,7 +104,6 @@
             return !isNaN(isoDate.getTime()) ? isoDate : null;
         }
 
-        // Função para parsear números no formato brasileiro (executada dentro do worker)
         function parseBrazilianNumber(value) {
             if (typeof value === 'number') return value;
             if (typeof value !== 'string' || !value) return 0;
@@ -126,11 +122,10 @@
             return isNaN(number) ? 0 : number;
         }
 
-        // Função para ler o conteúdo de um arquivo (executada dentro do worker) - VERSÃO CORRIGIDA
         const readFile = (file) => {
             return new Promise((resolve, reject) => {
                 if (!file) {
-                    resolve([]); // Resolve with empty array if no file is provided
+                    resolve([]);
                     return;
                 }
                 const reader = new FileReader();
@@ -139,13 +134,10 @@
                         let jsonData;
                         const data = event.target.result;
                         if (file.name.endsWith('.csv')) {
-                            // Lógica de decodificação corrigida e simplificada
                             let decodedData;
                             try {
-                                // Tenta decodificar como UTF-8 primeiro
                                 decodedData = new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(data));
                             } catch (e) {
-                                // Se falhar, usa ISO-8859-1 (Latin1), comum em arquivos do Windows
                                 decodedData = new TextDecoder('iso-8859-1').decode(new Uint8Array(data));
                             }
 
@@ -158,7 +150,6 @@
                             const firstLine = lines[0];
                             const delimiter = firstLine.includes(';') ? ';' : ',';
 
-                            // Remove o caractere invisível (BOM) do cabeçalho para garantir
                             const headers = lines.shift().trim().split(delimiter).map(h => h.replace(/"/g, '').trim().replace(/^\uFEFF/, ''));
 
                             jsonData = lines.map(line => {
@@ -185,7 +176,6 @@
             });
         };
 
-        // Função principal de processamento de dados de vendas (executada dentro do worker)
         const processSalesData = (rawData, clientMap, productMasterMap, newRcaSupervisorMap) => {
             return rawData.map(rawRow => {
                 const clientInfo = clientMap.get(String(rawRow['CODCLI']).trim()) || {};
@@ -194,20 +184,17 @@
                 let codUsur = String(rawRow['CODUSUR'] || '').trim();
                 const pedido = String(rawRow['PEDIDO'] || '');
                 let codSupervisor = String(rawRow['CODSUPERVISOR'] || '').trim();
-                let isAmericanas = false; // Flag para indicar se a regra Americanas foi aplicada
+                let isAmericanas = false;
 
-                // --- INÍCIO: REGRA ESPECIAL AMERICANAS (PRIORITÁRIA) ---
                 const nomeClienteParaLogica = (clientInfo.razaoSocial || clientInfo.fantasia || clientInfo.nomeCliente || '').toUpperCase();
                 if (nomeClienteParaLogica.includes('AMERICANAS')) {
                     vendorName = 'AMERICANAS';
                     codUsur = '1001';
                     supervisorName = 'BALCAO';
-                    codSupervisor = ''; // Ou o código do BALCAO se tiver um
+                    codSupervisor = '';
                     isAmericanas = true;
                 }
-                // --- FIM: REGRA ESPECIAL AMERICANAS ---
 
-                // --- INÍCIO DA REGRA DE ATRIBUIÇÃO MESTRE (APLICADA SE NÃO FOR AMERICANAS) ---
                 if (!isAmericanas) {
                     const supervisorInfo = newRcaSupervisorMap.get(codUsur);
                     if (supervisorInfo) {
@@ -216,9 +203,7 @@
                         codSupervisor = supervisorInfo.CODSUPERVISOR;
                     }
                 }
-                // --- FIM DA REGRA DE ATRIBUIÇÃO MESTRE ---
 
-                // --- Lógica restante (data, filial, etc.) ---
                 const supervisorUpper = (supervisorName || '').trim().toUpperCase();
                 if (supervisorUpper === 'BALCAO' || supervisorUpper === 'BALCÃO') supervisorName = 'BALCAO';
 
@@ -245,11 +230,11 @@
                     CIDADE: clientInfo.cidade || 'N/A', BAIRRO: clientInfo.bairro || 'N/A',
                     QTVENDA: qtVenda,
                     VLVENDA: parseBrazilianNumber(rawRow['VLVENDA']),
-                    VLBONIFIC: parseBrazilianNumber(rawRow['VLBONIFIC']), // Adicionado para ler bonificações
+                    VLBONIFIC: parseBrazilianNumber(rawRow['VLBONIFIC']),
                     TOTPESOLIQ: parseBrazilianNumber(rawRow['TOTPESOLIQ']), DTPED: dtPed, DTSAIDA: dtSaida,
                     POSICAO: String(rawRow['POSICAO'] || ''),
                     FILIAL: filialValue,
-                    CODSUPERVISOR: codSupervisor, // Atualizado para refletir a atribuição final
+                    CODSUPERVISOR: codSupervisor,
                     ESTOQUECX: parseBrazilianNumber(rawRow['ESTOQUECX']),
                     ESTOQUEUNIT: parseBrazilianNumber(rawRow['ESTOQUEUNIT']),
                     QTVENDA_EMBALAGEM_MASTER: isNaN(qtdeMaster) || qtdeMaster === 0 ? 0 : qtVenda / qtdeMaster
@@ -257,7 +242,6 @@
             });
         };
 
-        // Event listener que aguarda mensagens da página principal
         self.onmessage = async (event) => {
             const { salesFile, clientsFile, productsFile, historyFile, innovationsFile } = event.data;
 
@@ -271,7 +255,6 @@
                     readFile(innovationsFile)
                 ]);
 
-                // --- INÍCIO DA NOVA REGRA DE ATRIBUIÇÃO MESTRE (PASSO 1) ---
                 self.postMessage({ type: 'progress', status: 'Criando mapa mestre de supervisores...', percentage: 20 });
                 const newRcaSupervisorMap = new Map();
                 const lastSaleDateMap = new Map();
@@ -279,7 +262,6 @@
                 salesDataRaw.forEach(row => {
                     try {
                         const codUsur = String(row['CODUSUR'] || '').trim();
-                        // Ignora o codUsur 1001 (AMERICANAS) ao criar o mapa, pois ele não deve definir o supervisor de ninguém
                         if (codUsur === '1001') return;
 
                         const dtPed = row['DTPED'];
@@ -289,7 +271,6 @@
                         if (!saleDate || isNaN(saleDate.getTime())) return;
 
                         const lastDate = lastSaleDateMap.get(codUsur);
-                        // Compara se a data da venda atual é maior OU IGUAL (>=) para pegar a última entrada em caso de datas iguais
                         if (!lastDate || saleDate >= lastDate) {
                             lastSaleDateMap.set(codUsur, saleDate);
                             newRcaSupervisorMap.set(codUsur, {
@@ -299,11 +280,9 @@
                             });
                         }
                     } catch (e) {
-                        // Ignora erros em uma única linha para não parar o processo
                         console.error('Erro ao processar linha para mapa mestre:', e, row);
                     }
                 });
-                // --- FIM DA NOVA REGRA DE ATRIBUIÇÃO MESTRE ---
 
                 self.postMessage({ type: 'progress', status: 'Extraindo estoque do arquivo de vendas...', percentage: 25 });
                 const stockMap05 = new Map();
@@ -341,7 +320,6 @@
                     const pedido = String(rawRow['PEDIDO'] || '');
                     const codCli = String(rawRow['CODCLI'] || '').trim();
                     if(!codCli) return;
-                    // Lógica de VD HIAGO removida daqui, pois agora é tratada pelo Mapa Mestre
                 });
 
                 self.postMessage({ type: 'progress', status: 'Processando clientes...', percentage: 50 });
@@ -385,14 +363,7 @@
                     clientMap.set(codCli, clientData);
                 });
 
-                self.postMessage({ type: 'progress', status: 'Mapeando vendedores...', percentage: 60 });
-                // rcaInfoMap, populateRcaMap e chamadas removidas.
-
-                self.postMessage({ type: 'progress', status: 'Reatribuindo vendas do trimestre...', percentage: 65 });
-                // Bloco de reattributedHistoryDataRaw removido.
-
                 self.postMessage({ type: 'progress', status: 'Cruzando dados de vendas...', percentage: 70 });
-                // Modificado para passar o newRcaSupervisorMap
                 const processedSalesData = processSalesData(salesDataRaw, clientMap, productMasterMap, newRcaSupervisorMap);
                 const processedHistoryData = processSalesData(historyDataRaw, clientMap, productMasterMap, newRcaSupervisorMap);
 
@@ -439,13 +410,11 @@
                 let finalSalesData = applyBranchOverride(processedSalesData, clientBranchOverride);
                 let finalHistoryData = applyBranchOverride(processedHistoryData, clientBranchOverride);
 
-                // NOVA REGRA PARA VENDEDORES DO SUPERVISOR "TIAGO JOSÉ DE S" (CODSUPERVISOR 12)
                 self.postMessage({ type: 'progress', status: 'Aplicando regra específica para Supervisor Tiago...', percentage: 78 });
                 const tiagoSellersToMoveTo08 = new Set(['291', '292', '293', '284', '289', '287', '286']);
 
                 const applyTiagoRule = (salesArray) => {
                     return salesArray.map(sale => {
-                        // A regra é aplicada se o código do supervisor for 12 E o RCA estiver na lista
                         if (sale.CODSUPERVISOR === '12' && tiagoSellersToMoveTo08.has(sale.CODUSUR)) {
                             return { ...sale, FILIAL: '08' };
                         }
@@ -539,7 +508,6 @@
         const innovationsMonthData = embeddedData.innovationsMonth;
         const clientMapForKPIs = new Map(allClientsData.map(c => [String(c['Código']), c]));
 
-        // Cria um conjunto de clientes com vendas no mês atual para consulta rápida
         const clientsWithSalesThisMonth = new Set(allSalesData.map(s => s.CODCLI));
 
         const optimizedData = {};
@@ -625,7 +593,6 @@
                 }
             });
 
-            // --- Otimizações para Inovações ---
             optimizedData.salesByClientAndRca_CurrentMonth = new Map();
             allSalesData.forEach(s => {
                 if (s.VLVENDA > 0 && s.CODCLI && s.PRODUTO && s.CODUSUR) {
@@ -660,7 +627,6 @@
                 }
             });
 
-            // --- NOVAS OTIMIZAÇÕES PARA BONIFICAÇÃO ---
             optimizedData.bonificationsByClientAndRca_CurrentMonth = new Map();
             allSalesData.forEach(s => {
                 if (s.VLBONIFIC > 0 && s.CODCLI && s.PRODUTO && s.CODUSUR) {
@@ -1614,7 +1580,6 @@
                 if (data.multimarcas > 0) tooltipParts.push(`MULTIMARCAS: ${data.multimarcas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                 if (data.outros > 0.001) tooltipParts.push(`OUTROS: ${data.outros.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`);
                 const tooltipText = tooltipParts.length > 0 ? tooltipParts.join('<br>') : 'Sem detalhamento de categoria';
-                // Usando div tooltip aqui ainda - pode ser removido se não for necessário em outro lugar
                 return `<tr class="hover:bg-slate-700"><td class="px-4 py-2"><a href="#" class="text-teal-400 hover:underline" data-codcli="${data['Código']}">${data['Código']}</a></td><td class="px-4 py-2 flex items-center">${data.fantasia || data.razaoSocial}${novoLabel}</td><td class="px-4 py-2 text-right"><div class="tooltip">${data.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}<span class="tooltip-text" style="width: max-content; transform: translateX(-50%); margin-left: 0;">${tooltipText}</span></div></td><td class="px-4 py-2">${data.cidade}</td><td class="px-4 py-2">${data.bairro}</td><td class="px-4 py-2">${data.rcas[0] || '-'}</td><td class="px-4 py-2">${data.rcas[1] || '-'}</td></tr>`
             }).join('');
 
@@ -1817,7 +1782,6 @@
             return positiveClients;
         }
 
-        // Função para formatar valor completo (ex: R$ 1.658.352,26)
         const formatValue = (val, format) => {
             if (format === 'currency') return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             if (format === 'decimal') return val.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -1825,7 +1789,6 @@
             return val.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
         };
 
-        // Função para formatar valor abreviado (ex: 1.66 Mi)
         const formatAbbreviated = (val, format) => {
             let prefix = format === 'currency' ? 'R$ ' : '';
             if (val >= 1000000) {
@@ -1833,7 +1796,7 @@
             } else if (val >= 1000) {
                  return prefix + (val / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' K';
             }
-            return null; // Retorna nulo se não precisar abreviar
+            return null;
         };
 
         function renderKpiCards(kpis) {
@@ -1843,29 +1806,11 @@
                 const variation = kpi.history > 0 ? ((kpi.current - kpi.history) / kpi.history) * 100 : (kpi.current > 0 ? 100 : 0);
                 const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400';
 
-                // *** INÍCIO DA MODIFICAÇÃO COM TOOLTIP ***
-                let displayValue;
-                let tooltipContent = '';
-
-                // Apenas abrevia o KPI de "Faturamento Total"
-                if (kpi.title === 'Faturamento Total') {
-                    const abbreviated = formatAbbreviated(kpi.current, kpi.format);
-                    if (abbreviated) {
-                        displayValue = abbreviated; // Usa o valor abreviado
-                        tooltipContent = `<span class="tooltip-text">${formatValue(kpi.current, kpi.format)}</span>`; // Prepara o tooltip
-                    } else {
-                        displayValue = formatValue(kpi.current, kpi.format); // Usa valor normal se não abreviar
-                    }
-                } else {
-                    displayValue = formatValue(kpi.current, kpi.format); // Formata normal os outros KPIs
-                }
-
-                const valueElement = tooltipContent ? `<div class="tooltip">${displayValue}${tooltipContent}</div>` : displayValue;
-                // *** FIM DA MODIFICAÇÃO COM TOOLTIP ***
+                const displayValue = formatValue(kpi.current, kpi.format);
 
                 return `<div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
                             <p class="text-slate-400 text-sm">${kpi.title}</p>
-                            <p class="text-2xl font-bold text-white my-2">${valueElement}</p> {/* Usa o elemento com ou sem tooltip */}
+                            <p class="text-2xl font-bold text-white my-2">${displayValue}</p>
                             <p class="text-sm ${colorClass}">${variation.toFixed(2)}% vs Média do Trimestre</p>
                             <p class="text-xs text-slate-500">Média Trim.: ${formatValue(kpi.history, kpi.format)}</p>
                         </div>`;
@@ -1873,7 +1818,7 @@
         }
 
         function calculateAverageMixComDevolucao(salesData, targetCodfors) {
-            if (!salesData || salesData.length === 0 || !targetCodfors || targetCodfors.length === 0) return 0;
+             if (!salesData || salesData.length === 0 || !targetCodfors || targetCodfors.length === 0) return 0;
 
             const clientProductNetValue = new Map();
 
