@@ -34,7 +34,7 @@
             outline-offset: 2px;
             transform: scale(1.1);
         }
-        /* Estilo básico para tooltip - pode ser removido se não for mais usado em outros lugares */
+        /* Estilo básico para tooltip */
         .tooltip { position: relative; display: inline-block; cursor: pointer; }
         .tooltip .tooltip-text { visibility: hidden; width: auto; min-width: 80px; background-color: #1e293b; color: #fff; text-align: center; border-radius: 6px; padding: 5px 8px; position: absolute; z-index: 1001; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
         .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
@@ -194,22 +194,34 @@
                 let codUsur = String(rawRow['CODUSUR'] || '').trim();
                 const pedido = String(rawRow['PEDIDO'] || '');
                 let codSupervisor = String(rawRow['CODSUPERVISOR'] || '').trim();
+                let isAmericanas = false; // Flag para indicar se a regra Americanas foi aplicada
 
-                // --- INÍCIO DA NOVA REGRA DE ATRIBUIÇÃO MESTRE ---
-                const supervisorInfo = newRcaSupervisorMap.get(codUsur);
-                if (supervisorInfo) {
-                    vendorName = supervisorInfo.NOME;
-                    supervisorName = supervisorInfo.SUPERV;
-                    codSupervisor = supervisorInfo.CODSUPERVISOR;
+                // --- INÍCIO: REGRA ESPECIAL AMERICANAS (PRIORITÁRIA) ---
+                const nomeClienteParaLogica = (clientInfo.razaoSocial || clientInfo.fantasia || clientInfo.nomeCliente || '').toUpperCase();
+                if (nomeClienteParaLogica.includes('AMERICANAS')) {
+                    vendorName = 'AMERICANAS';
+                    codUsur = '1001';
+                    supervisorName = 'BALCAO';
+                    codSupervisor = ''; // Ou o código do BALCAO se tiver um
+                    isAmericanas = true;
                 }
-                // --- FIM DA NOVA REGRA DE ATRIBUIÇÃO MESTRE ---
+                // --- FIM: REGRA ESPECIAL AMERICANAS ---
 
-                // --- REGRAS ANTIGAS DE TRANSFERÊNCIA REMOVIDAS ---
+                // --- INÍCIO DA REGRA DE ATRIBUIÇÃO MESTRE (APLICADA SE NÃO FOR AMERICANAS) ---
+                if (!isAmericanas) {
+                    const supervisorInfo = newRcaSupervisorMap.get(codUsur);
+                    if (supervisorInfo) {
+                        vendorName = supervisorInfo.NOME;
+                        supervisorName = supervisorInfo.SUPERV;
+                        codSupervisor = supervisorInfo.CODSUPERVISOR;
+                    }
+                }
+                // --- FIM DA REGRA DE ATRIBUIÇÃO MESTRE ---
 
-                const nomeClienteParaLogica = (clientInfo.razaoSocial || '').toUpperCase();
+                // --- Lógica restante (data, filial, etc.) ---
                 const supervisorUpper = (supervisorName || '').trim().toUpperCase();
                 if (supervisorUpper === 'BALCAO' || supervisorUpper === 'BALCÃO') supervisorName = 'BALCAO';
-                // Regras de Americanas e VD HIAGO removidas
+
                 let dtPed = rawRow['DTPED'];
                 const dtSaida = rawRow['DTSAIDA'];
                 const parsedDtPed = parseDate(dtPed);
@@ -267,6 +279,9 @@
                 salesDataRaw.forEach(row => {
                     try {
                         const codUsur = String(row['CODUSUR'] || '').trim();
+                        // Ignora o codUsur 1001 (AMERICANAS) ao criar o mapa, pois ele não deve definir o supervisor de ninguém
+                        if (codUsur === '1001') return;
+
                         const dtPed = row['DTPED'];
                         if (!codUsur || !dtPed) return;
 
@@ -367,13 +382,11 @@
                         inscricaoEstadual: String(client['Insc. Est. / Produtor'] || 'N/A')
                     };
                     if (clientRcaOverrides.has(codCli)) clientData.rcas.unshift(clientRcaOverrides.get(codCli));
-                    // Lógica de Americanas removida daqui
                     clientMap.set(codCli, clientData);
                 });
 
                 self.postMessage({ type: 'progress', status: 'Mapeando vendedores...', percentage: 60 });
                 // rcaInfoMap, populateRcaMap e chamadas removidas.
-                // O newRcaSupervisorMap já foi criado.
 
                 self.postMessage({ type: 'progress', status: 'Reatribuindo vendas do trimestre...', percentage: 65 });
                 // Bloco de reattributedHistoryDataRaw removido.
@@ -1830,61 +1843,33 @@
                 const variation = kpi.history > 0 ? ((kpi.current - kpi.history) / kpi.history) * 100 : (kpi.current > 0 ? 100 : 0);
                 const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400';
 
-                // *** INÍCIO DA MODIFICAÇÃO PARA ABREVIAR SEM TOOLTIP ***
-                let displayValue = formatValue(kpi.current, kpi.format);
+                // *** INÍCIO DA MODIFICAÇÃO COM TOOLTIP ***
+                let displayValue;
+                let tooltipContent = '';
 
                 // Apenas abrevia o KPI de "Faturamento Total"
                 if (kpi.title === 'Faturamento Total') {
                     const abbreviated = formatAbbreviated(kpi.current, kpi.format);
                     if (abbreviated) {
                         displayValue = abbreviated; // Usa o valor abreviado
+                        tooltipContent = `<span class="tooltip-text">${formatValue(kpi.current, kpi.format)}</span>`; // Prepara o tooltip
+                    } else {
+                        displayValue = formatValue(kpi.current, kpi.format); // Usa valor normal se não abreviar
                     }
+                } else {
+                    displayValue = formatValue(kpi.current, kpi.format); // Formata normal os outros KPIs
                 }
-                // *** FIM DA MODIFICAÇÃO PARA ABREVIAR SEM TOOLTIP ***
+
+                const valueElement = tooltipContent ? `<div class="tooltip">${displayValue}${tooltipContent}</div>` : displayValue;
+                // *** FIM DA MODIFICAÇÃO COM TOOLTIP ***
 
                 return `<div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
                             <p class="text-slate-400 text-sm">${kpi.title}</p>
-                            <p class="text-2xl font-bold text-white my-2">${displayValue}</p>
+                            <p class="text-2xl font-bold text-white my-2">${valueElement}</p> {/* Usa o elemento com ou sem tooltip */}
                             <p class="text-sm ${colorClass}">${variation.toFixed(2)}% vs Média do Trimestre</p>
                             <p class="text-xs text-slate-500">Média Trim.: ${formatValue(kpi.history, kpi.format)}</p>
                         </div>`;
             }).join('');
-        }
-
-        function calculateAverageMixComDevolucao(salesData, targetCodfors) {
-            if (!salesData || salesData.length === 0 || !targetCodfors || targetCodfors.length === 0) return 0;
-
-            const clientProductNetValue = new Map();
-
-            for (const sale of salesData) {
-                if (!targetCodfors.includes(String(sale.CODFOR))) continue;
-                if (!sale.CODCLI || !sale.PRODUTO) continue;
-
-                if (!clientProductNetValue.has(sale.CODCLI)) {
-                    clientProductNetValue.set(sale.CODCLI, new Map());
-                }
-                const clientProducts = clientProductNetValue.get(sale.CODCLI);
-
-                const currentValue = clientProducts.get(sale.PRODUTO) || 0;
-                clientProducts.set(sale.PRODUTO, currentValue + (Number(sale.VLVENDA) || 0));
-            }
-
-            const mixValues = [];
-            for (const products of clientProductNetValue.values()) {
-                let positiveProductCount = 0;
-                for (const netValue of products.values()) {
-                    if (netValue > 1) {
-                        positiveProductCount++;
-                    }
-                }
-                if (positiveProductCount > 0) {
-                    mixValues.push(positiveProductCount);
-                }
-            }
-
-            if (mixValues.length === 0) return 0;
-
-            return mixValues.reduce((a, b) => a + b, 0) / mixValues.length;
         }
 
         function calculateAverageMixComDevolucao(salesData, targetCodfors) {
@@ -1974,6 +1959,7 @@
             return positivadosCount;
         }
 
+
         function groupSalesByMonth(salesData) {
             const salesByMonth = {};
             salesData.forEach(sale => {
@@ -1985,6 +1971,7 @@
             });
             return salesByMonth;
         }
+
         function monthlyKpiAverage(historySales, kpiFn, ...kpiArgs) {
             const salesByMonth = groupSalesByMonth(historySales);
             const kpiValues = Object.values(salesByMonth).map(sales => kpiFn(sales, ...kpiArgs));
@@ -2634,17 +2621,14 @@
             allProductsInScope.forEach(product => {
                 const stock = activeStockMap.get(product.code) || 0;
 
-                // Vendas do Mês Atual + Histórico para o produto
                 const productAllSales = allCombinedSales.filter(s => s.PRODUTO === product.code);
                 const productHistorySales = filteredHistory.filter(s => s.PRODUTO === product.code);
 
                 const totalQty = productAllSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
 
-                // Média Mensal
                 const monthCountForProduct = getUniqueMonthCount(productAllSales);
                 const monthlyAvgSale = totalQty / monthCountForProduct;
 
-                // Média Diária para Tendência
                 const salesByDay = new Map();
                 productAllSales.forEach(s => {
                     const date = parseDate(s.DTPED);
@@ -2667,7 +2651,7 @@
                     monthlyAvgSale,
                     trendDays,
                     currentMonthSalesQty,
-                    isNew: productHistorySales.length === 0, // Um produto é novo se não tiver vendas no histórico
+                    isNew: productHistorySales.length === 0,
                     hasHistory: productHistorySales.length > 0,
                     soldThisMonth: currentMonthSalesQty > 0
                 });
@@ -3231,7 +3215,6 @@
                              }
                         }
                         if (!gotIt && currentBonus && currentBonus.has(productCode)) {
-                            // Correção aqui: era 'p', deveria ser 'productCode'
                             const rcasWhoBonused = currentBonus.get(productCode);
                             if (sellerRcaCodes.size === 0 || [...rcasWhoBonused].some(rca => sellerRcaCodes.has(rca))) {
                                 gotIt = true;
@@ -3564,11 +3547,10 @@
                         const catName = cat.split(' - ')[1];
                         const status = client.innovationStatus[catName];
 
-                        // Célula com conteúdo e estilo
                         const cell = {
                             content: status ? 'S' : 'N',
                             styles: {
-                                textColor: status ? [34, 139, 34] : [220, 20, 60], // Verde para S, Vermelho para N
+                                textColor: status ? [34, 139, 34] : [220, 20, 60],
                                 fontStyle: 'bold'
                             }
                         };
@@ -3971,34 +3953,6 @@
                     else selectedStockRedes = selectedStockRedes.filter(r => r !== value);
                     selectedStockRedes = updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
                     handleStockFilterChange();
-                }
-            });
-
-
-            stockProductFilterBtn.addEventListener('click', () => {
-                updateStockProductFilter();
-                stockProductFilterDropdown.classList.toggle('hidden');
-            });
-            const debouncedStockProductSearch = debounce(updateStockProductFilter, 250);
-            stockProductFilterDropdown.addEventListener('input', (e) => {
-                if (e.target.id === 'stock-product-search-input') {
-                    debouncedStockProductSearch();
-                }
-            });
-            stockProductFilterDropdown.addEventListener('change', (e) => {
-                 if(e.target.dataset.filterType === 'stock' && handleProductFilterChange(e, selectedStockProducts)) {
-                    handleStockFilterChange();
-                    updateStockProductFilter();
-                }
-            });
-
-            document.getElementById('stock-trend-filter-container').addEventListener('click', (e) => {
-                const button = e.target.closest('.stock-trend-btn');
-                if (button) {
-                    stockTrendFilter = button.dataset.trend;
-                    document.querySelectorAll('.stock-trend-btn').forEach(btn => btn.classList.remove('active'));
-                    button.classList.add('active');
-                    updateStockView();
                 }
             });
 
@@ -5051,6 +5005,9 @@
     </script>
 </body>
 </html>
+
+
+    
 
 
 
