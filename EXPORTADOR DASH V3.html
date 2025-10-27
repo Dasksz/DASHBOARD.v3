@@ -37,6 +37,15 @@
         .tooltip { position: relative; display: inline-block; cursor: pointer; }
         .tooltip .tooltip-text { visibility: hidden; width: auto; min-width: 80px; background-color: #1e293b; color: #fff; text-align: center; border-radius: 6px; padding: 5px 8px; position: absolute; z-index: 1001; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
         .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+        /* Hide number input arrows */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        input[type=number] {
+          -moz-appearance: textfield; /* Firefox */
+        }
     </style>
 </head>
 <body class="text-slate-200 flex items-center justify-center min-h-screen">
@@ -242,6 +251,23 @@
             });
         };
 
+        // Helper function to calculate passed working days within a specific month
+        function getPassedWorkingDaysInSpecificMonth(year, month, today) {
+            let count = 0;
+            const date = new Date(year, month, 1);
+            // Ensure we don't go past today's date or out of the target month
+            while (date <= today && date.getMonth() === month) {
+                const dayOfWeek = date.getDay();
+                // Monday to Friday
+                if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                    count++;
+                }
+                date.setDate(date.getDate() + 1);
+            }
+            return count > 0 ? count : 1; // Return at least 1 to avoid division by zero
+        }
+
+
         self.onmessage = async (event) => {
             const { salesFile, clientsFile, productsFile, historyFile, innovationsFile } = event.data;
 
@@ -305,15 +331,28 @@
                     }
                 });
 
-                self.postMessage({ type: 'progress', status: 'Mapeando produtos...', percentage: 30 });
+                self.postMessage({ type: 'progress', status: 'Mapeando produtos e criando lista de ativos...', percentage: 30 });
                 const productMasterMap = new Map();
+                const activeProductCodesFromCadastro = new Set();
+                const productDetailsMap = new Map();
+
                 productsDataRaw.forEach(prod => {
                     const productCode = String(prod['Código'] || '').trim();
                     if (!productCode) return;
+                    activeProductCodesFromCadastro.add(productCode);
                     let qtdeMaster = parseInt(prod['Qtde embalagem master(Compra)'], 10);
                     if (isNaN(qtdeMaster) || qtdeMaster <= 0) qtdeMaster = 1;
                     productMasterMap.set(productCode, qtdeMaster);
+                    // Captura detalhes básicos do produto do cadastro
+                    if (!productDetailsMap.has(productCode)) {
+                        productDetailsMap.set(productCode, {
+                            descricao: String(prod['Descrição'] || `Produto ${productCode}`),
+                            fornecedor: String(prod['Nome do fornecedor'] || 'N/A'),
+                            codfor: String(prod['Fornecedor'] || 'N/A')
+                        });
+                    }
                 });
+
 
                 const clientRcaOverrides = new Map();
                 salesDataRaw.forEach(rawRow => {
@@ -477,6 +516,18 @@
                 };
                 const aggregatedByOrder = aggregateOrders(finalSalesData);
 
+                // Calculate passed working days in the current month
+                const lastSaleDate = finalSalesData.length > 0
+                    ? new Date(Math.max.apply(null, finalSalesData.map(s => parseDate(s.DTPED)).filter(d => d && !isNaN(d))))
+                    : new Date();
+                lastSaleDate.setHours(0,0,0,0);
+                const passedWorkingDaysCurrentMonth = getPassedWorkingDaysInSpecificMonth(
+                    lastSaleDate.getFullYear(),
+                    lastSaleDate.getMonth(),
+                    lastSaleDate
+                );
+
+
                 self.postMessage({ type: 'progress', status: 'Finalizando...', percentage: 100 });
 
                 self.postMessage({
@@ -488,7 +539,10 @@
                         clients: Array.from(clientMap.values()),
                         stockMap05: Object.fromEntries(stockMap05),
                         stockMap08: Object.fromEntries(stockMap08),
-                        innovationsMonth: innovationsDataRaw
+                        innovationsMonth: innovationsDataRaw,
+                        activeProductCodes: Array.from(activeProductCodesFromCadastro), // Envia a lista de códigos ativos
+                        productDetails: Object.fromEntries(productDetailsMap), // Envia os detalhes dos produtos
+                        passedWorkingDaysCurrentMonth: passedWorkingDaysCurrentMonth // Envia os dias úteis passados no mês atual
                     }
                 });
 
@@ -507,6 +561,9 @@
         const stockData08 = new Map(Object.entries(embeddedData.stockMap08 || {}));
         const innovationsMonthData = embeddedData.innovationsMonth;
         const clientMapForKPIs = new Map(allClientsData.map(c => [String(c['Código']), c]));
+        const activeProductCodesFromCadastro = new Set(embeddedData.activeProductCodes || []); // Recebe a lista de códigos
+        const productDetailsMap = new Map(Object.entries(embeddedData.productDetails || {})); // Recebe os detalhes
+        const passedWorkingDaysCurrentMonth = embeddedData.passedWorkingDaysCurrentMonth || 1; // Recebe os dias úteis passados, default 1
 
         const clientsWithSalesThisMonth = new Set(allSalesData.map(s => s.CODCLI));
 
@@ -516,6 +573,9 @@
 
         const lastSaleDate = allSalesData.length > 0 ? new Date(Math.max.apply(null, allSalesData.map(s => parseDate(s.DTPED)).filter(d => d && !isNaN(d)))) : new Date();
         lastSaleDate.setHours(0,0,0,0);
+        let maxWorkingDaysStock = 0; // Initialize globally
+        let customWorkingDaysStock = 0; // Initialize globally
+
 
         function initializeOptimizedDataStructures() {
             optimizedData.clientsByRca = new Map();
@@ -655,6 +715,30 @@
                     clientBonuses.get(s.PRODUTO).add(s.CODUSUR);
                 }
             });
+
+            const workingDaysSet = new Set();
+            const allSalesForDays = [...allSalesData, ...allHistoryData];
+            allSalesForDays.forEach(sale => {
+                const date = parseDate(sale.DTPED);
+                if (date) {
+                    const dayOfWeek = date.getDay();
+                    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                        workingDaysSet.add(date.toISOString().split('T')[0]);
+                    }
+                }
+            });
+            maxWorkingDaysStock = workingDaysSet.size > 0 ? workingDaysSet.size : 1;
+            customWorkingDaysStock = maxWorkingDaysStock;
+
+            // Ensure this runs after the page is fully loaded
+            setTimeout(() => {
+                const maxDaysLabel = document.getElementById('max-working-days-label');
+                if (maxDaysLabel) {
+                    maxDaysLabel.textContent = `(Máx: ${maxWorkingDaysStock})`;
+                }
+                 const daysInput = document.getElementById('stock-working-days-input');
+                 if(daysInput) daysInput.value = customWorkingDaysStock;
+            }, 0);
         }
 
         aggregatedOrders.sort((a, b) => {
@@ -914,7 +998,6 @@
         let innovationsIncludeBonus = true;
         let innovationsMonthIncludeBonus = true;
 
-        // Adiciona variáveis globais para exportação de dados das novas tabelas
         let innovationsMonthTableDataForExport = [];
         let innovationsByClientForExport = [];
         let categoryLegendForExport = [];
@@ -1151,8 +1234,9 @@
                 }
                 date.setDate(date.getDate() + 1);
             }
-            return count;
+            return count > 0 ? count : 1; // Return at least 1
         }
+
 
         function updateTrendChart(currentSales, historicalSales) {
             const currentYear = lastSaleDate.getFullYear();
@@ -1432,6 +1516,10 @@
             updateRedeFilter(stockRedeFilterDropdown, stockComRedeBtnText, selectedStockRedes, allClientsData, 'Com Rede');
 
             document.querySelectorAll('#stock-fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
+            
+            customWorkingDaysStock = maxWorkingDaysStock;
+            const daysInput = document.getElementById('stock-working-days-input');
+            if(daysInput) daysInput.value = customWorkingDaysStock;
 
             handleStockFilterChange();
         }
@@ -2548,70 +2636,86 @@
 
         function updateStockView() {
             const { sales: filteredSales, history: filteredHistory } = getStockFilteredData();
+            const allCombinedSales = [...filteredSales, ...filteredHistory];
 
             const filial = stockFilialFilter.value;
             const activeStockMap = getActiveStockMap(filial);
 
-            const allProductsInScope = new Map();
-            const allCombinedSales = [...filteredSales, ...filteredHistory];
-
-            allCombinedSales.forEach(s => {
-                if (!allProductsInScope.has(s.PRODUTO)) {
-                    allProductsInScope.set(s.PRODUTO, {
-                        code: s.PRODUTO,
-                        descricao: s.DESCRICAO,
-                        fornecedor: s.FORNECEDOR,
-                        codfor: s.CODFOR
-                    });
-                }
-            });
-
             const productAnalysis = new Map();
 
-            allProductsInScope.forEach(product => {
-                const stock = activeStockMap.get(product.code) || 0;
+            // Identifica produtos com vendas ou estoque para determinar atividade
+            const productsWithActivity = new Set();
+            allCombinedSales.forEach(s => productsWithActivity.add(s.PRODUTO));
+            activeStockMap.forEach((qty, code) => { if (qty > 0) productsWithActivity.add(code); });
 
-                const productAllSales = allCombinedSales.filter(s => s.PRODUTO === product.code);
-                const productHistorySales = filteredHistory.filter(s => s.PRODUTO === product.code);
+             activeProductCodesFromCadastro.forEach(productCode => {
+                // Pula se não estiver no cadastro OU não tiver atividade
+                if (!productsWithActivity.has(productCode)) return;
 
-                const totalQty = productAllSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                const details = productDetailsMap.get(productCode) || {
+                    descricao: `Produto ${productCode}`,
+                    fornecedor: 'N/A',
+                    codfor: 'N/A'
+                };
 
-                const monthCountForProduct = getUniqueMonthCount(productAllSales);
-                const monthlyAvgSale = totalQty / monthCountForProduct;
+                const stock = activeStockMap.get(productCode) || 0;
+                const productAllSales = allCombinedSales.filter(s => s.PRODUTO === productCode);
+                const totalQtySold = productAllSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
 
-                const salesByDay = new Map();
-                productAllSales.forEach(s => {
-                    const date = parseDate(s.DTPED);
-                    if (date) {
-                        const dateString = date.toISOString().split('T')[0];
-                        const currentQty = salesByDay.get(dateString) || 0;
-                        salesByDay.set(dateString, currentQty + s.QTVENDA_EMBALAGEM_MASTER);
-                    }
-                });
-                const saleDays = salesByDay.size;
-                const dailyAvgSaleForTrend = saleDays > 0 ? totalQty / saleDays : 0;
-                const trendDays = dailyAvgSaleForTrend > 0 ? (stock / dailyAvgSaleForTrend) : Infinity;
+                // Verifica se tem estoque OU vendas para ser considerado ativo para a tabela de estoque
+                if (stock <= 0 && totalQtySold <= 0) return;
 
-                const productCurrentSales = filteredSales.filter(s => s.PRODUTO === product.code);
+                const productHistorySales = filteredHistory.filter(s => s.PRODUTO === productCode);
+                const productCurrentSales = filteredSales.filter(s => s.PRODUTO === productCode);
                 const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
 
-                productAnalysis.set(product.code, {
-                    ...product,
+                const isNew = productHistorySales.length === 0 && productCurrentSales.length > 0;
+
+                let effectiveWorkingDays;
+                let dailyAvgSale;
+
+                if (isNew) {
+                    // Para produtos novos, usa dias úteis do mês atual OU o valor da caixa (o que for menor)
+                    effectiveWorkingDays = Math.min(passedWorkingDaysCurrentMonth, customWorkingDaysStock > 0 ? customWorkingDaysStock : passedWorkingDaysCurrentMonth);
+                    dailyAvgSale = effectiveWorkingDays > 0 ? currentMonthSalesQty / effectiveWorkingDays : 0;
+                } else {
+                    // Para produtos com histórico, usa o valor da caixa de seleção
+                    effectiveWorkingDays = customWorkingDaysStock > 0 ? customWorkingDaysStock : 1;
+                    const monthCountForProduct = getUniqueMonthCount(productAllSales); // Considera meses com venda
+                    const totalQtySoldHistoricalScope = productAllSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0); // Venda total no período
+                    const averageMonthlySale = monthCountForProduct > 0 ? totalQtySoldHistoricalScope / monthCountForProduct : 0;
+                    // Média diária baseada na média mensal e dias úteis da caixa
+                    dailyAvgSale = effectiveWorkingDays > 0 ? averageMonthlySale / (maxWorkingDaysStock / monthCountForProduct) : 0; // Ajuste para média diária proporcional
+                     if (!isFinite(dailyAvgSale)) { // Fallback se o cálculo falhar
+                        dailyAvgSale = effectiveWorkingDays > 0 ? totalQtySold / effectiveWorkingDays : 0;
+                    }
+                }
+
+                const trendDays = dailyAvgSale > 0 ? (stock / dailyAvgSale) : Infinity;
+                const monthlyAvgSale = getUniqueMonthCount(productAllSales) > 0 ? totalQtySold / getUniqueMonthCount(productAllSales) : 0; // Recalcula média mensal geral
+
+
+                productAnalysis.set(productCode, {
+                    code: productCode,
+                    ...details,
                     stock,
-                    monthlyAvgSale,
+                    monthlyAvgSale, // Média mensal geral
+                    dailyAvgSale,   // Média diária calculada (nova ou histórica)
                     trendDays,
                     currentMonthSalesQty,
-                    isNew: productHistorySales.length === 0,
+                    isNew,
                     hasHistory: productHistorySales.length > 0,
                     soldThisMonth: currentMonthSalesQty > 0
                 });
             });
 
+
             let sortedAnalysis = [...productAnalysis.values()].sort((a, b) => {
-                const trendA = isFinite(a.trendDays) ? a.trendDays : 9999;
-                const trendB = isFinite(b.trendDays) ? b.trendDays : 9999;
-                return trendA - trendB;
+                 const trendA = isFinite(a.trendDays) ? a.trendDays : -1; // Joga Infinity pro final
+                 const trendB = isFinite(b.trendDays) ? b.trendDays : -1; // Joga Infinity pro final
+                return trendB - trendA; // Ordena do maior para o menor
             });
+
 
             if (stockTrendFilter !== 'all') {
                 sortedAnalysis = sortedAnalysis.filter(item => {
@@ -2619,14 +2723,18 @@
                     if (stockTrendFilter === 'low') return isFinite(trend) && trend < 15;
                     if (stockTrendFilter === 'medium') return isFinite(trend) && trend >= 15 && trend < 30;
                     if (stockTrendFilter === 'good') return isFinite(trend) && trend >= 30;
-                    return false;
+                     // Não precisa mais dos filtros 'new' e 'no_sale' separados aqui, a lógica principal trata
+                    return false; // Se não for low/medium/good, não mostra
                 });
             }
 
+
             stockAnalysisTableBody.innerHTML = sortedAnalysis.map(item => {
                 let trendText;
-                if (item.isNew && item.stock > 0 && item.monthlyAvgSale === 0) {
-                     trendText = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/30 text-blue-300">NOVO</span>`;
+                let newTag = item.isNew ? ` <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500/30 text-blue-300 ml-1">NOVO</span>` : '';
+
+                if (!isFinite(item.trendDays) && item.stock > 0) {
+                    trendText = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-500/30 text-gray-300">S/ VENDA</span>`;
                 } else if (isFinite(item.trendDays)) {
                     const trendDays = Math.floor(item.trendDays);
                     let trendColor = 'text-slate-400';
@@ -2635,7 +2743,7 @@
                     else trendColor = 'text-green-400';
                     trendText = `<span class="font-bold ${trendColor}">${trendDays} dias</span>`;
                 } else {
-                    trendText = 'N/A';
+                    trendText = '-'; // Caso estoque 0 e sem venda (já filtrado antes, mas como fallback)
                 }
 
                 return `
@@ -2644,10 +2752,12 @@
                         <td class="px-4 py-2 text-xs">(${item.codfor}) ${item.fornecedor}</td>
                         <td class="px-4 py-2 text-right text-xs">${item.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                         <td class="px-4 py-2 text-right text-xs">${item.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
-                        <td class="px-4 py-2 text-right text-xs">${trendText}</td>
+                        <td class="px-4 py-2 text-right text-xs">${item.dailyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
+                        <td class="px-4 py-2 text-right text-xs flex items-center justify-end">${trendText}${newTag}</td>
                     </tr>
                 `;
             }).join('');
+
 
             const growth = [];
             const decline = [];
@@ -2655,24 +2765,32 @@
             const lostProducts = [];
 
             productAnalysis.forEach(p => {
-                if (p.soldThisMonth && p.hasHistory) {
+                 // Produtos ATIVOS (com estoque ou venda)
+                 if (p.soldThisMonth && p.hasHistory) {
                     if (p.currentMonthSalesQty > p.monthlyAvgSale) {
                         growth.push(p);
-                    } else {
+                    } else if (p.currentMonthSalesQty < p.monthlyAvgSale && p.monthlyAvgSale > 0) { // Garante que a média não seja zero
                         decline.push(p);
                     }
-                } else if (p.soldThisMonth && !p.hasHistory) {
+                 } else if (p.isNew) { // Se for novo E teve venda este mês
                     newProducts.push(p);
-                } else if (!p.soldThisMonth && p.hasHistory) {
+                 } else if (!p.soldThisMonth && p.hasHistory && p.monthlyAvgSale > 0) { // Se teve histórico mas não vendeu AGORA
                     lostProducts.push(p);
-                }
+                 }
             });
+
 
             const renderProductTable = (bodyElement, data, showVariation = true) => {
                 bodyElement.innerHTML = data.map(p => {
-                    const variation = p.monthlyAvgSale > 0 ? ((p.currentMonthSalesQty - p.monthlyAvgSale) / p.monthlyAvgSale) * 100 : (p.currentMonthSalesQty > 0 ? 100 : 0);
-                    const colorClass = variation > 0 ? 'text-green-400' : 'text-red-400';
-                    const variationText = p.monthlyAvgSale > 0 ? `${variation.toFixed(0)}%` : (p.currentMonthSalesQty > 0 ? 'Novo' : '0%');
+                    const variation = p.monthlyAvgSale > 0 ? ((p.currentMonthSalesQty - p.monthlyAvgSale) / p.monthlyAvgSale) * 100 : (p.currentMonthSalesQty > 0 ? Infinity : 0);
+                    const colorClass = variation > 0 ? 'text-green-400' : (variation < 0 ? 'text-red-400' : 'text-slate-400');
+                    let variationText = '0%';
+                    if (isFinite(variation)) {
+                        variationText = `${variation.toFixed(0)}%`;
+                    } else if (variation === Infinity) {
+                         variationText = 'Novo';
+                    }
+
 
                     return `
                         <tr class="hover:bg-slate-700/50">
@@ -2822,7 +2940,7 @@
             let topCoverageItem = { name: '-', coverage: 0, clients: 0 };
 
             productsToAnalyze.forEach(productCode => {
-                const productInfo = allSalesData.find(s => s.PRODUTO === productCode) || allHistoryData.find(s => s.PRODUTO === productCode) || { DESCRICAO: `Produto ${productCode}`};
+                const productInfo = productDetailsMap.get(productCode) || { DESCRICAO: `Produto ${productCode}`}; // Usa detalhes do cadastro
 
                 let clientsWhoGotProductCurrent = 0;
                 let clientsWhoGotProductPrevious = 0;
@@ -2875,7 +2993,7 @@
 
                 if (coverageCurrent > topCoverageItem.coverage) {
                     topCoverageItem = {
-                        name: `(${productCode}) ${productInfo.DESCRICAO}`,
+                        name: `(${productCode}) ${productInfo.descricao}`, // Usa descricao do cadastro
                         coverage: coverageCurrent,
                         clients: clientsWhoGotProductCurrent
                     };
@@ -2909,7 +3027,7 @@
                 const stockQty = getActiveStockMap(innovationsFilialFilter.value).get(productCode) || 0;
 
                 tableData.push({
-                    descricao: `(${productCode}) ${productInfo.DESCRICAO}`,
+                    descricao: `(${productCode}) ${productInfo.descricao}`, // Usa descricao do cadastro
                     stockQty: stockQty,
                     coveragePrevious: coveragePrevious,
                     coverageCurrent: coverageCurrent,
@@ -3665,7 +3783,15 @@
             viewTableBtn.addEventListener('click', () => { chartView.classList.add('hidden'); tableView.classList.remove('hidden'); viewTableBtn.classList.add('hidden'); viewChartBtn.classList.remove('hidden'); updateAllVisuals(); });
             viewChartBtn.addEventListener('click', () => { tableView.classList.add('hidden'); chartView.classList.remove('hidden'); viewChartBtn.classList.add('hidden'); viewTableBtn.classList.remove('hidden'); updateAllVisuals(); });
             viewComparisonBtn.addEventListener('click', () => { mainDashboard.classList.add('hidden'); comparisonView.classList.remove('hidden'); updateAllComparisonFilters(); updateComparisonView(); });
-            viewStockBtn.addEventListener('click', () => { mainDashboard.classList.add('hidden'); stockView.classList.remove('hidden'); handleStockFilterChange(); });
+            viewStockBtn.addEventListener('click', () => { 
+                mainDashboard.classList.add('hidden'); 
+                stockView.classList.remove('hidden'); 
+                const maxDaysLabel = document.getElementById('max-working-days-label');
+                if (maxDaysLabel) maxDaysLabel.textContent = `(Máx: ${maxWorkingDaysStock})`;
+                const daysInput = document.getElementById('stock-working-days-input');
+                if(daysInput && parseInt(daysInput.value) === 0) daysInput.value = customWorkingDaysStock;
+                handleStockFilterChange(); 
+            });
             showCityBtn.addEventListener('click', () => { resetMainFilters(); mainDashboard.classList.add('hidden'); cityView.classList.remove('hidden'); document.getElementById('city-view-content').classList.add('hidden'); document.getElementById('city-view-loader').classList.remove('hidden'); setTimeout(() => { populateSupervisors('city-supervisor-filter', allSalesData); selectedCitySellers = updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData); updateRedeFilter(cityRedeFilterDropdown, cityComRedeBtnText, selectedCityRedes, allClientsData); updateCityView(); document.getElementById('city-view-loader').classList.add('hidden'); document.getElementById('city-view-content').classList.remove('hidden'); }, 10); });
             backToMainFromCityBtn.addEventListener('click', () => { resetCityFilters(); cityView.classList.add('hidden'); mainDashboard.classList.remove('hidden'); updateAllVisuals(); });
             showWeeklyBtn.addEventListener('click', () => { resetMainFilters(); mainDashboard.classList.add('hidden'); weeklyView.classList.remove('hidden'); populateWeeklyFilters(); updateWeeklyView(); });
@@ -4162,6 +4288,41 @@
                 if (!innovationsProductFilterBtn.contains(e.target) && !innovationsProductFilterDropdown.contains(e.target)) innovationsProductFilterDropdown.classList.add('hidden');
                 if (!innovationsMonthVendedorFilterBtn.contains(e.target) && !innovationsMonthVendedorFilterDropdown.contains(e.target)) innovationsMonthVendedorFilterDropdown.classList.add('hidden');
             });
+
+            const stockWorkingDaysInput = document.getElementById('stock-working-days-input');
+            if (stockWorkingDaysInput) {
+                stockWorkingDaysInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const value = parseInt(e.target.value);
+                        if (!isNaN(value) && value > 0 && value <= maxWorkingDaysStock) {
+                            customWorkingDaysStock = value;
+                        } else {
+                             e.target.value = customWorkingDaysStock;
+                        }
+                        handleStockFilterChange();
+                    }
+                });
+                stockWorkingDaysInput.addEventListener('blur', (e) => {
+                    const value = parseInt(e.target.value);
+                     if (isNaN(value) || value <= 0 || value > maxWorkingDaysStock) {
+                         e.target.value = customWorkingDaysStock;
+                    } else if (value !== customWorkingDaysStock) {
+
+                        customWorkingDaysStock = value;
+                        handleStockFilterChange();
+                    }
+                });
+            }
+
+            document.querySelectorAll('.stock-trend-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    stockTrendFilter = btn.dataset.trend;
+                    document.querySelectorAll('.stock-trend-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    handleStockFilterChange();
+                });
+            });
         }
 
         initializeOptimizedDataStructures();
@@ -4301,6 +4462,8 @@
                             .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 10px; }
                             .kpi-card { background-color: #1d2347; border-radius: 0.5rem; padding: 1.5rem; text-align: center; border: 1px solid #334155; }
                             .stock-trend-btn.active { outline: 2px solid #fff; outline-offset: 2px; transform: scale(1.1); }
+                            input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+                            input[type=number] { -moz-appearance: textfield; }
                         </style>
                     </head>
                     <body class="bg-slate-900 text-slate-200 antialiased">
@@ -4345,7 +4508,7 @@
                                                 <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-l-lg hover:bg-slate-500">Todos</button>
                                                 <button type="button" data-group="com_rede" id="main-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 hover:bg-slate-500 border-t border-b border-slate-700 flex items-center gap-2">
                                                     <span id="main-com-rede-btn-text">Com Rede</span>
-                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                                                 </button>
                                                 <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-r-lg hover:bg-slate-500">Sem Rede</button>
                                             </div>
@@ -4612,14 +4775,23 @@
                                     <button id="clear-stock-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
                                 </div>
                             </div>
-                            <div class="bg-[#1d2347] p-4 rounded-lg mb-6 border border-slate-700">
+                             <div class="bg-[#1d2347] p-4 rounded-lg mb-6 border border-slate-700">
                                 <div class="flex justify-between items-center mb-4">
                                     <h2 class="text-lg font-semibold text-white">Análise de Estoque e Tendência de Saída</h2>
-                                    <div id="stock-trend-filter-container" class="flex items-center gap-2">
-                                        <button data-trend="all" class="stock-trend-btn active p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-gray-400"></div></button>
-                                        <button data-trend="low" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-red-500"></div></button>
-                                        <button data-trend="medium" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-yellow-500"></div></button>
-                                        <button data-trend="good" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-green-500"></div></button>
+                                    <div class="flex items-end gap-4">
+                                        <div>
+                                            <label for="stock-working-days-input" class="block text-xs font-medium text-slate-400 mb-1 text-center">Dias Úteis</label>
+                                            <div class="flex items-center justify-center gap-1">
+                                                <input type="number" id="stock-working-days-input" value="0" min="1" class="bg-slate-700 text-sm rounded-lg block w-20 p-1.5 border border-slate-600 text-white text-center">
+                                                <span id="max-working-days-label" class="text-xs text-slate-500 whitespace-nowrap">(Máx: 0)</span>
+                                            </div>
+                                        </div>
+                                        <div id="stock-trend-filter-container" class="flex items-center gap-2">
+                                            <button data-trend="all" class="stock-trend-btn active p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-gray-400"></div></button>
+                                            <button data-trend="low" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-red-500"></div></button>
+                                            <button data-trend="medium" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-yellow-500"></div></button>
+                                            <button data-trend="good" class="stock-trend-btn p-1 rounded-full transition-transform duration-200"><div class="w-5 h-5 rounded-full bg-green-500"></div></button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
@@ -4630,6 +4802,7 @@
                                                 <th class="px-4 py-3">Fornecedor</th>
                                                 <th class="px-4 py-3 text-right">Estoque Atual (Emb.)</th>
                                                 <th class="px-4 py-3 text-right">Venda Média Mensal (Emb.)</th>
+                                                <th class="px-4 py-3 text-right">Média diária (Emb.)</th>
                                                 <th class="px-4 py-3 text-right">Tendência (Dias)</th>
                                             </tr>
                                         </thead>
@@ -4955,3 +5128,4 @@
     </script>
 </body>
 </html>
+
