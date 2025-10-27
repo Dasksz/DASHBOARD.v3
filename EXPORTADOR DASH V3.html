@@ -1806,7 +1806,12 @@
                 const variation = kpi.history > 0 ? ((kpi.current - kpi.history) / kpi.history) * 100 : (kpi.current > 0 ? 100 : 0);
                 const colorClass = variation > 0 ? 'text-green-400' : variation < 0 ? 'text-red-400' : 'text-slate-400';
 
-                const displayValue = formatValue(kpi.current, kpi.format);
+                let displayValue;
+                if (kpi.title === 'Faturamento Total') {
+                    displayValue = formatAbbreviated(kpi.current, kpi.format) || formatValue(kpi.current, kpi.format);
+                } else {
+                    displayValue = formatValue(kpi.current, kpi.format);
+                }
 
                 return `<div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
                             <p class="text-slate-400 text-sm">${kpi.title}</p>
@@ -4950,7 +4955,3 @@
     </script>
 </body>
 </html>
-
-
-
-
