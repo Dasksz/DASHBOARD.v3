@@ -574,6 +574,7 @@
         const lastSaleDate = allSalesData.length > 0 ? new Date(Math.max.apply(null, allSalesData.map(s => parseDate(s.DTPED)).filter(d => d && !isNaN(d)))) : new Date();
         lastSaleDate.setHours(0,0,0,0);
         let maxWorkingDaysStock = 0; // Initialize globally
+        let sortedWorkingDays = []; // Lista de todos os dias úteis, ordenada
         let customWorkingDaysStock = 0; // Initialize globally
 
 
@@ -727,9 +728,21 @@
                     }
                 }
             });
+        
+            sortedWorkingDays = Array.from(workingDaysSet).sort((a, b) => new Date(a) - new Date(b)); // Sort ASCENDING
+        
             maxWorkingDaysStock = workingDaysSet.size > 0 ? workingDaysSet.size : 1;
             customWorkingDaysStock = maxWorkingDaysStock;
 
+            optimizedData.productPastaMap = new Map();
+            const populatePastaMap = (sale) => {
+                if (sale.PRODUTO && sale.OBSERVACAOFOR && !optimizedData.productPastaMap.has(sale.PRODUTO)) {
+                    optimizedData.productPastaMap.set(sale.PRODUTO, sale.OBSERVACAOFOR);
+                }
+            };
+            allSalesData.forEach(populatePastaMap);
+            allHistoryData.forEach(populatePastaMap);
+        
             // Ensure this runs after the page is fully loaded
             setTimeout(() => {
                 const maxDaysLabel = document.getElementById('max-working-days-label');
@@ -1818,7 +1831,7 @@
             const inputValue = comparisonCityFilter.value.toLowerCase();
             const allAvailableCities = [...new Set(dataSource.map(c => c.CIDADE).filter(c => c && c !== 'N/A'))].sort();
             const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
-            if (filteredCities.length > 0 && (document.activeElement === comparisonCityFilter || !comparisonCitySuggestions.classList.contains('manual-hide'))) {
+            if (filteredCities.length > 0 && document.activeElement === comparisonCityFilter) {
                 comparisonCitySuggestions.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
                 comparisonCitySuggestions.classList.remove('hidden');
             } else {
@@ -2148,7 +2161,7 @@
             const inputValue = stockCityFilter.value.toLowerCase();
             const allAvailableCities = [...new Set(dataSource.map(c => c.CIDADE).filter(c => c && c !== 'N/A'))].sort();
             const filteredCities = inputValue ? allAvailableCities.filter(c => c.toLowerCase().includes(inputValue)) : allAvailableCities;
-            if (filteredCities.length > 0 && (document.activeElement === stockCityFilter || !stockCitySuggestions.classList.contains('manual-hide'))) {
+            if (filteredCities.length > 0 && document.activeElement === stockCityFilter) {
                 stockCitySuggestions.innerHTML = filteredCities.map(c => `<div class="p-2 hover:bg-slate-600 cursor-pointer">${c}</div>`).join('');
                 stockCitySuggestions.classList.remove('hidden');
             } else {
@@ -2641,16 +2654,46 @@
             const filial = stockFilialFilter.value;
             const activeStockMap = getActiveStockMap(filial);
 
+            const selectedSuppliers = selectedStockSuppliers;
+            const selectedProducts = selectedStockProducts;
+            const currentPasta = currentStockFornecedor;
+
             const productAnalysis = new Map();
 
-            // Identifica produtos com vendas ou estoque para determinar atividade
-            const productsWithActivity = new Set();
-            allCombinedSales.forEach(s => productsWithActivity.add(s.PRODUTO));
-            activeStockMap.forEach((qty, code) => { if (qty > 0) productsWithActivity.add(code); });
+            // Identifica produtos com VENDAS FILTRADAS
+            const productsWithFilteredActivity = new Set();
+            allCombinedSales.forEach(s => productsWithFilteredActivity.add(s.PRODUTO));
 
-             activeProductCodesFromCadastro.forEach(productCode => {
-                // Pula se não estiver no cadastro OU não tiver atividade
-                if (!productsWithActivity.has(productCode)) return;
+            // Identifica produtos com ESTOQUE QUE BATEM COM OS FILTROS
+            activeStockMap.forEach((qty, productCode) => {
+                if (qty > 0) {
+                    const details = productDetailsMap.get(productCode);
+                    if (!details) return; // Se não tá no cadastro, ignora
+
+                    // 1. Checar Fornecedor
+                    if (selectedSuppliers.length > 0 && !selectedSuppliers.includes(String(details.codfor))) {
+                        return; 
+                    }
+                    // 2. Checar Produto
+                    if (selectedProducts.length > 0 && !selectedProducts.includes(String(productCode))) {
+                        return; 
+                    }
+                    // 3. Checar Pasta
+                    if (currentPasta) {
+                        const pastaDoProduto = optimizedData.productPastaMap.get(productCode) || '';
+                        if (pastaDoProduto !== currentPasta) {
+                             return; 
+                        }
+                    }
+                    
+                    // Se passou em tudo, adiciona
+                    productsWithFilteredActivity.add(productCode);
+                }
+            });
+            
+            // O loop principal agora usa ESSE set filtrado
+            productsWithFilteredActivity.forEach(productCode => {
+                if (!activeProductCodesFromCadastro.has(productCode)) return;
 
                 const details = productDetailsMap.get(productCode) || {
                     descricao: `Produto ${productCode}`,
@@ -2671,23 +2714,46 @@
 
                 const isNew = productHistorySales.length === 0 && productCurrentSales.length > 0;
 
-                let effectiveWorkingDays;
                 let dailyAvgSale;
 
                 if (isNew) {
-                    // Para produtos novos, usa dias úteis do mês atual OU o valor da caixa (o que for menor)
-                    effectiveWorkingDays = Math.min(passedWorkingDaysCurrentMonth, customWorkingDaysStock > 0 ? customWorkingDaysStock : passedWorkingDaysCurrentMonth);
+                    const daysToConsider = customWorkingDaysStock > 0 ? customWorkingDaysStock : passedWorkingDaysCurrentMonth; // Usa dias passados se caixa for 0
+                    const effectiveWorkingDays = Math.min(passedWorkingDaysCurrentMonth, daysToConsider);
                     dailyAvgSale = effectiveWorkingDays > 0 ? currentMonthSalesQty / effectiveWorkingDays : 0;
                 } else {
-                    // Para produtos com histórico, usa o valor da caixa de seleção
-                    effectiveWorkingDays = customWorkingDaysStock > 0 ? customWorkingDaysStock : 1;
-                    const monthCountForProduct = getUniqueMonthCount(productAllSales); // Considera meses com venda
-                    const totalQtySoldHistoricalScope = productAllSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0); // Venda total no período
-                    const averageMonthlySale = monthCountForProduct > 0 ? totalQtySoldHistoricalScope / monthCountForProduct : 0;
-                    // Média diária baseada na média mensal e dias úteis da caixa
-                    dailyAvgSale = effectiveWorkingDays > 0 ? averageMonthlySale / (maxWorkingDaysStock / monthCountForProduct) : 0; // Ajuste para média diária proporcional
-                     if (!isFinite(dailyAvgSale)) { // Fallback se o cálculo falhar
-                        dailyAvgSale = effectiveWorkingDays > 0 ? totalQtySold / effectiveWorkingDays : 0;
+                    // LÓGICA PARA PRODUTOS COM HISTÓRICO (Sua nova lógica de "Janela Móvel")
+                    
+                    const daysToCalculate = customWorkingDaysStock;
+    
+                    if (daysToCalculate > 0 && sortedWorkingDays.length > 0) {
+                        // 1. Achar o intervalo de datas
+                        // Pega a data mais recente de todo o histórico de vendas
+                        const endDate = parseDate(sortedWorkingDays[sortedWorkingDays.length - 1]);
+                        
+                        // Acha o índice da data de início (N dias para trás)
+                        // Ex: 100 dias na lista. Quer 21 dias. Índice da data final é 99.
+                        // Índice da data inicial é 99 - 21 + 1 = 79.
+                        const targetIndex = Math.max(0, sortedWorkingDays.length - daysToCalculate);
+                        const startDate = parseDate(sortedWorkingDays[targetIndex]);
+    
+                        // 2. Somar a quantidade SÓ DO PRODUTO ATUAL nesse intervalo
+                        let totalQtySoldInRange = 0;
+                        productAllSales.forEach(sale => {
+                            const saleDate = parseDate(sale.DTPED);
+                            // Garante que a venda está dentro do intervalo de dias úteis
+                            if (saleDate && saleDate >= startDate && saleDate <= endDate) {
+                                totalQtySoldInRange += sale.QTVENDA_EMBALAGEM_MASTER;
+                            }
+                        });
+    
+                        // 3. Calcular a média diária
+                        dailyAvgSale = totalQtySoldInRange / daysToCalculate;
+    
+                    } else {
+                        // FALLBACK: Se a caixa for 0, usa a média "vitalícia" (total de vendas / total de dias)
+                        const totalQtySoldHistoricalScope = productAllSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
+                        const totalWorkingDaysForProduct = maxWorkingDaysStock > 0 ? maxWorkingDaysStock : 1; // Usa o max global
+                        dailyAvgSale = totalQtySoldHistoricalScope / totalWorkingDaysForProduct;
                     }
                 }
 
@@ -3977,6 +4043,7 @@
                 updateComparisonProductFilter();
                 comparisonProductFilterDropdown.classList.toggle('hidden');
             });
+            
             const debouncedComparisonProductSearch = debounce(updateComparisonProductFilter, 250);
             comparisonProductFilterDropdown.addEventListener('input', (e) => {
                 if (e.target.id === 'comparison-product-search-input') {
@@ -3989,7 +4056,25 @@
                     updateComparisonProductFilter();
                 }
             });
+            stockProductFilterBtn.addEventListener('click', () => {
+                updateStockProductFilter();
+                stockProductFilterDropdown.classList.toggle('hidden');
+            });
 
+            const debouncedStockProductSearch = debounce(updateStockProductFilter, 250);
+            stockProductFilterDropdown.addEventListener('input', (e) => {
+                if (e.target.id === 'stock-product-search-input') {
+                    debouncedStockProductSearch();
+                }
+            });
+
+            stockProductFilterDropdown.addEventListener('change', (e) => {
+                if(e.target.dataset.filterType === 'stock' && handleProductFilterChange(e, selectedStockProducts)) {
+                    handleStockFilterChange();
+                    updateStockProductFilter();
+                }
+            });
+        
             stockFilialFilter.addEventListener('change', handleStockFilterChange);
             clearStockFiltersBtn.addEventListener('click', resetStockFilters);
             stockFornecedorToggleContainer.addEventListener('click', (e) => { if (e.target.tagName === 'BUTTON') { const fornecedor = e.target.dataset.fornecedor; if (currentStockFornecedor === fornecedor) { currentStockFornecedor = ''; e.target.classList.remove('active'); } else { currentStockFornecedor = fornecedor; stockFornecedorToggleContainer.querySelectorAll('.fornecedor-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); } handleStockFilterChange(); } });
