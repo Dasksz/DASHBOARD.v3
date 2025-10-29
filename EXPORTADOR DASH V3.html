@@ -202,6 +202,13 @@
                     supervisorName = 'BALCAO';
                     codSupervisor = '';
                     isAmericanas = true;
+        
+                    if (clientInfo.rcas) { // Checa se clientInfo é o objeto real (e não o {} vazio)
+                         clientInfo.rca1 = '1001';
+                         if (!clientInfo.rcas.includes('1001')) {
+                            clientInfo.rcas.unshift('1001');
+                         }
+                    }
                 }
 
                 if (!isAmericanas) {
