@@ -2713,68 +2713,74 @@
                 const productCurrentSales = filteredSales.filter(s => s.PRODUTO === productCode);
                 const currentMonthSalesQty = productCurrentSales.reduce((sum, s) => sum + s.QTVENDA_EMBALAGEM_MASTER, 0);
 
-                // --- NOVA LÓGICA UNIFICADA (Início) ---
+                // --- NOVA LÓGICA UNIFICADA v2 (Início) ---
 
-                // 1. Achar a "data de nascimento" do produto (Dt.Cadastro)
-                const productCadastroDate = parseDate(details.dtCadastro);
-                let productFirstWorkingDayIndex = 0; // Default: produto sempre existiu
-                
-                if (productCadastroDate) {
-                    const cadastroDateString = productCadastroDate.toISOString().split('T')[0];
-                    // Acha o primeiro dia útil em que esse produto "existia" no nosso histórico
-                    productFirstWorkingDayIndex = sortedWorkingDays.findIndex(d => d >= cadastroDateString);
-                    
-                    if (productFirstWorkingDayIndex === -1) {
-                        // Se não achou, o produto foi cadastrado depois do último dia de venda.
-                        // Isso significa que ele tem 0 dias de vida útil no nosso histórico.
-                        productFirstWorkingDayIndex = sortedWorkingDays.length; 
-                    }
-                }
-                
-                // 2. Calcular o máximo de dias que esse produto PODE ser analisado
-                // (Total de dias úteis do histórico - dias antes do produto nascer)
-                const productMaxLifeInWorkingDays = sortedWorkingDays.length - productFirstWorkingDayIndex;
+                // 1. Achar a "data de nascimento" do produto (Dt.Cadastro)
+                const productCadastroDate = parseDate(details.dtCadastro);
+                let productFirstWorkingDayIndex = 0; // Default: produto sempre existiu
+                
+                if (productCadastroDate) {
+                    const cadastroDateString = productCadastroDate.toISOString().split('T')[0];
+                    productFirstWorkingDayIndex = sortedWorkingDays.findIndex(d => d >= cadastroDateString);
+                    if (productFirstWorkingDayIndex === -1) {
+                        productFirstWorkingDayIndex = sortedWorkingDays.length; 
+                    }
+                }
+                
+                // 2. Calcular a "vida útil" do produto baseada no cadastro
+                const productMaxLifeInWorkingDays = sortedWorkingDays.length - productFirstWorkingDayIndex;
 
-                // 3. Pegar o número de dias da caixa
-                const daysFromBox = customWorkingDaysStock;
+                // 3. Pegar o número de dias da caixa
+                const daysFromBox = customWorkingDaysStock;
 
-                // 4. Achar os dias efetivos para o cálculo
-                let effectiveDaysToCalculate;
-                if (daysFromBox > 0) {
-                    // É o MENOR valor entre a caixa e a "vida" do produto
-                    effectiveDaysToCalculate = Math.min(daysFromBox, productMaxLifeInWorkingDays);
-                } else {
-                    // Fallback (caixa = 0): usa a vida inteira do produto
-                    effectiveDaysToCalculate = productMaxLifeInWorkingDays; 
-                }
+                // 4. Achar os dias efetivos para o cálculo (AQUI ESTÁ A SUA REGRA)
+                let effectiveDaysToCalculate;
+                
+                // Checa se o produto é "Novo de Fato" (sem vendas no histórico, mas com vendas agora)
+                const isFactuallyNewOrReactivated = (productHistorySales.length === 0 && productCurrentSales.length > 0);
 
-                // Garante que não vamos dividir por 0
-                const daysDivisor = effectiveDaysToCalculate > 0 ? effectiveDaysToCalculate : 1;
-                
-                // 5. Achar o intervalo de datas para a "janela móvel"
-                const endDate = parseDate(sortedWorkingDays[sortedWorkingDays.length - 1]); // Data mais recente
-                // Conta 'daysDivisor' para trás
-                const targetIndex = Math.max(0, sortedWorkingDays.length - daysDivisor); 
-                const startDate = parseDate(sortedWorkingDays[targetIndex]); // Data de início
+                if (isFactuallyNewOrReactivated) {
+                    // LÓGICA PARA PRODUTOS NOVOS/REATIVADOS:
+                    // Ignora a Dt.Cadastro. Usa o MENOR valor entre os dias passados do MÊS ATUAL e o valor da caixa.
+                    const daysToConsider = (daysFromBox > 0) ? daysFromBox : passedWorkingDaysCurrentMonth; // Usa dias passados se caixa for 0
+                    effectiveDaysToCalculate = Math.min(passedWorkingDaysCurrentMonth, daysToConsider);
+                } else {
+                    // LÓGICA PARA PRODUTOS COM HISTÓRICO (A LÓGICA DA "Dt.Cadastro"):
+                    // É o MENOR valor entre a caixa e a "vida" (Dt.Cadastro) do produto.
+                    if (daysFromBox > 0) {
+                        effectiveDaysToCalculate = Math.min(daysFromBox, productMaxLifeInWorkingDays);
+                } else {
+                        // Fallback (caixa = 0): usa a vida inteira do produto
+                        effectiveDaysToCalculate = productMaxLifeInWorkingDays; 
+                    }
+                }
+                
+                // Garante que não vamos dividir por 0
+                const daysDivisor = effectiveDaysToCalculate > 0 ? effectiveDaysToCalculate : 1;
+                
+                // 5. Achar o intervalo de datas para a "janela móvel"
+                // A data de início agora é baseada no divisor que acabamos de calcular
+                const endDate = parseDate(sortedWorkingDays[sortedWorkingDays.length - 1]); // Data mais recente
+                const targetIndex = Math.max(0, sortedWorkingDays.length - daysDivisor); 
+                const startDate = parseDate(sortedWorkingDays[targetIndex]); // Data de início
+                
+                // 6. Somar as vendas DO PRODUTO nesse intervalo
+                let totalQtySoldInRange = 0;
+                productAllSales.forEach(sale => {
+                    const saleDate = parseDate(sale.DTPED);
+                    // Garante que a venda está dentro do intervalo de dias úteis
+                    if (saleDate && saleDate >= startDate && saleDate <= endDate) {
+                        totalQtySoldInRange += sale.QTVENDA_EMBALAGEM_MASTER;
+                    }
+                });
 
-                // 6. Somar as vendas DO PRODUTO nesse intervalo
-                let totalQtySoldInRange = 0;
-                productAllSales.forEach(sale => {
-                    const saleDate = parseDate(sale.DTPED);
-                    // Garante que a venda está dentro do intervalo de dias úteis
-                    if (saleDate && saleDate >= startDate && saleDate <= endDate) {
-                        totalQtySoldInRange += sale.QTVENDA_EMBALAGEM_MASTER;
-                    }
-                });
+                // 7. Calcular a média diária final
+                let dailyAvgSale = totalQtySoldInRange / daysDivisor;
 
-                // 7. Calcular a média diária final
-                let dailyAvgSale = totalQtySoldInRange / daysDivisor;
+                // Identifica se é "novo" apenas para o TAG visual (baseado no cadastro)
+                const isNew = productMaxLifeInWorkingDays <= passedWorkingDaysCurrentMonth;
 
-                // Identifica se é "novo" apenas para o TAG visual
-                const isNew = productMaxLifeInWorkingDays <= passedWorkingDaysCurrentMonth;
-
-
-                // --- NOVA LÓGICA UNIFICADA (Fim) ---
+                // --- NOVA LÓGICA UNIFICADA v2 (Fim) ---
                 const trendDays = dailyAvgSale > 0 ? (stock / dailyAvgSale) : Infinity;
                 const monthlyAvgSale = getUniqueMonthCount(productAllSales) > 0 ? totalQtySold / getUniqueMonthCount(productAllSales) : 0; // Recalcula média mensal geral
 
@@ -2849,20 +2855,21 @@
             const lostProducts = [];
 
             productAnalysis.forEach(p => {
-                 // Produtos ATIVOS (com estoque ou venda)
-                 if (p.soldThisMonth && p.hasHistory) {
-                    if (p.currentMonthSalesQty > p.monthlyAvgSale) {
-                        growth.push(p);
-                    } else if (p.currentMonthSalesQty < p.monthlyAvgSale && p.monthlyAvgSale > 0) { // Garante que a média não seja zero
-                        decline.push(p);
-                    }
-                 } else if (p.isNew) { // Se for novo E teve venda este mês
-                    newProducts.push(p);
-                 } else if (!p.soldThisMonth && p.hasHistory && p.monthlyAvgSale > 0) { // Se teve histórico mas não vendeu AGORA
-                    lostProducts.push(p);
-                 }
-            });
-
+                 // Produtos ATIVOS (com estoque ou venda)
+                 if (p.soldThisMonth && p.hasHistory) {
+                    // É um produto antigo que vendeu este mês. Checar crescimento/queda.
+                    if (p.currentMonthSalesQty >= p.monthlyAvgSale) {
+                        growth.push(p);
+                    } else if (p.currentMonthSalesQty < p.monthlyAvgSale && p.monthlyAvgSale > 0) { 
+                        decline.push(p);
+                    }
+                 } else if (p.soldThisMonth && !p.hasHistory) { 
+                    // Vendeu este mês E NÃO tem histórico (Definição correta de "Novo")
+                    newProducts.push(p);
+                 } else if (!p.soldThisMonth && p.hasHistory) { 
+                    lostProducts.push(p);
+                 }
+            });
 
             const renderProductTable = (bodyElement, data, showVariation = true) => {
                 bodyElement.innerHTML = data.map(p => {
