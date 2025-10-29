@@ -2839,7 +2839,7 @@
                 return `
                     <tr class="hover:bg-slate-700/50">
                         <td class="px-4 py-2 text-xs">(${item.code}) ${item.descricao}</td>
-                        <td class="px-4 py-2 text-xs">(${item.codfor}) ${item.fornecedor}</td>
+                        <td class="px-4 py-2 text-xs">(${item.codfor}) ${item.fornecedor.split(' ').slice(0, 4).join(' ')}</td>
                         <td class="px-4 py-2 text-right text-xs">${item.stock.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                         <td class="px-4 py-2 text-right text-xs">${item.monthlyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
                         <td class="px-4 py-2 text-right text-xs">${item.dailyAvgSale.toLocaleString('pt-BR', {maximumFractionDigits: 2})}</td>
