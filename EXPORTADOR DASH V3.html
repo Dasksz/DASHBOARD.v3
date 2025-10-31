@@ -9,33 +9,51 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0d1126;
+            background-color: #f4f7f6; /* Alterado para background claro */
         }
         .file-input-label {
             display: block;
             text-align: left;
             font-size: 0.875rem;
             font-weight: 500;
-            color: #94a3b8;
+            color: #475569; /* Alterado para texto escuro */
             margin-bottom: 0.5rem;
         }
         .progress-bar-container {
-            background-color: #1e293b;
+            background-color: #e2e8f0; /* Alterado para claro */
             border-radius: 0.5rem;
             overflow: hidden;
         }
         .progress-bar {
-            background-color: #2dd4bf;
+            background-color: #0d9488; /* Alterado para novo destaque (teal) */
             height: 100%;
             transition: width 0.3s ease-in-out;
         }
         .stock-trend-btn.active {
-            outline: 2px solid #fff;
+            outline: 2px solid #334155; /* Alterado para escuro */
             outline-offset: 2px;
             transform: scale(1.1);
         }
         .tooltip { position: relative; display: inline-block; cursor: pointer; }
-        .tooltip .tooltip-text { visibility: hidden; width: auto; min-width: 80px; background-color: #1e293b; color: #fff; text-align: center; border-radius: 6px; padding: 5px 8px; position: absolute; z-index: 1001; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+        .tooltip .tooltip-text { 
+            visibility: hidden; 
+            width: auto; 
+            min-width: 80px; 
+            background-color: #334155; /* Alterado para fundo escuro no tooltip */
+            color: #fff; 
+            text-align: center; 
+            border-radius: 6px; 
+            padding: 5px 8px; 
+            position: absolute; 
+            z-index: 1001; 
+            bottom: 125%; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            opacity: 0; 
+            transition: opacity 0.3s; 
+            pointer-events: none; 
+            white-space: nowrap; 
+        }
         .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
         input[type=number]::-webkit-inner-spin-button,
         input[type=number]::-webkit-outer-spin-button {
@@ -47,35 +65,35 @@
         }
     </style>
 </head>
-<body class="text-slate-200 flex items-center justify-center min-h-screen">
-    <div class="text-center p-8 bg-[#1d2347] rounded-lg shadow-2xl max-w-lg w-full m-4 border border-slate-700">
-        <h1 class="text-2xl font-bold text-white mb-4">Painel de Vendas - Gerador</h1>
-        <p class="text-slate-400 mb-6">Carregue os arquivos para gerar um dashboard offline. O processamento agora ocorre em segundo plano, sem travar a interface.</p>
+<body class="text-slate-800 flex items-center justify-center min-h-screen"> <!-- Alterado para texto escuro -->
+    <div class="text-center p-8 bg-white rounded-lg shadow-2xl max-w-lg w-full m-4 border border-slate-200"> <!-- Alterado para fundo branco e borda clara -->
+        <h1 class="text-2xl font-bold text-slate-900 mb-4">Painel de Vendas - Gerador</h1> <!-- Alterado para texto escuro -->
+        <p class="text-slate-600 mb-6">Carregue os arquivos para gerar um dashboard offline. O processamento agora ocorre em segundo plano, sem travar a interface.</p> <!-- Alterado para texto escuro (médio) -->
 
         <div class="space-y-4 mb-6">
             <div>
                 <label for="sales-file-input" class="file-input-label">1. Arquivo de Vendas (Mês Atual)</label>
-                <input type="file" id="sales-file-input" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600" accept=".csv, .xls, .xlsx"/>
+                <input type="file" id="sales-file-input" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300" accept=".csv, .xls, .xlsx"/> <!-- Cores do input alteradas -->
             </div>
             <div>
                 <label for="clients-file-input" class="file-input-label">2. Cadastro de Clientes</label>
-                <input type="file" id="clients-file-input" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600" accept=".csv, .xls, .xlsx"/>
+                <input type="file" id="clients-file-input" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300" accept=".csv, .xls, .xlsx"/> <!-- Cores do input alteradas -->
             </div>
             <div>
                 <label for="products-file-input" class="file-input-label">3. Cadastro de Produtos</label>
-                <input type="file" id="products-file-input" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600" accept=".csv, .xls, .xlsx"/>
+                <input type="file" id="products-file-input" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300" accept=".csv, .xls, .xlsx"/> <!-- Cores do input alteradas -->
             </div>
             <div>
                 <label for="history-file-input" class="file-input-label">4. Histórico de Vendas (Trimestre Anterior)</label>
-                <input type="file" id="history-file-input" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600" accept=".csv, .xls, .xlsx"/>
+                <input type="file" id="history-file-input" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300" accept=".csv, .xls, .xlsx"/> <!-- Cores do input alteradas -->
             </div>
              <div>
                 <label for="innovations-file-input" class="file-input-label">5. Planilha de Inovações (Mês)</label>
-                <input type="file" id="innovations-file-input" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600" accept=".csv, .xls, .xlsx"/>
+                <input type="file" id="innovations-file-input" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300" accept=".csv, .xls, .xlsx"/> <!-- Cores do input alteradas -->
             </div>
         </div>
 
-        <button id="generate-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg w-full disabled:bg-slate-600" disabled>
+        <button id="generate-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg w-full disabled:bg-slate-300" disabled> <!-- Cor do botão alterada para laranja -->
             Gerar Relatório
         </button>
 
@@ -86,8 +104,8 @@
             </div>
         </div>
 
-        <div id="download-container" class="hidden mt-6 border-t border-slate-700 pt-6">
-            <a id="download-link" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-lg w-full inline-block">
+        <div id="download-container" class="hidden mt-6 border-t border-slate-200 pt-6"> <!-- Borda alterada para clara -->
+            <a id="download-link" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-lg w-full inline-block"> <!-- Cor do botão alterada para laranja -->
                 Baixar Relatório HTML
             </a>
         </div>
@@ -240,6 +258,19 @@
                 const qtdeMaster = productMasterMap.get(productCode) || 1;
                 const qtVenda = parseInt(String(rawRow['QTVENDA'] || '0').trim(), 10) || 0;
 
+                // --- INÍCIO DA MODIFICAÇÃO: REGRA TIPOVENDA ---
+                // Captura o tipo de venda primeiro
+                const tipoVenda = String(rawRow['TIPOVENDA'] || 'N/A').trim();
+                
+                // Apenas TIPOVENDA '1' e '9' contam para faturamento e peso
+                const isFaturamento = (tipoVenda === '1' || tipoVenda === '9');
+                
+                // Captura os valores originais
+                const vlVendaOriginal = parseBrazilianNumber(rawRow['VLVENDA']);
+                const vlBonificOriginal = parseBrazilianNumber(rawRow['VLBONIFIC']);
+                const pesoOriginal = parseBrazilianNumber(rawRow['TOTPESOLIQ']);
+                // --- FIM DA MODIFICAÇÃO ---
+
                 let filialValue = String(rawRow['FILIAL'] || '').trim();
                 if (filialValue === '5') filialValue = '05';
                 if (filialValue === '8') filialValue = '08';
@@ -251,15 +282,23 @@
                     CODUSUR: codUsur, CODCLI: codCliStr, CLIENTE_NOME: clientInfo.nomeCliente || 'N/A',
                     CIDADE: clientInfo.cidade || 'N/A', BAIRRO: clientInfo.bairro || 'N/A',
                     QTVENDA: qtVenda,
-                    VLVENDA: parseBrazilianNumber(rawRow['VLVENDA']),
-                    VLBONIFIC: parseBrazilianNumber(rawRow['VLBONIFIC']),
-                    TOTPESOLIQ: parseBrazilianNumber(rawRow['TOTPESOLIQ']), DTPED: dtPed, DTSAIDA: dtSaida,
+                    
+                    // --- INÍCIO DA MODIFICAÇÃO: APLICAÇÃO DA REGRA ---
+                    // Se não for faturamento (1 ou 9), VLVENDA é 0
+                    VLVENDA: isFaturamento ? vlVendaOriginal : 0,
+                    
+                    // Se não for faturamento, soma o que veio em VLVENDA (indevidamente) ao VLBONIFIC
+                    VLBONIFIC: isFaturamento ? vlBonificOriginal : (vlVendaOriginal + vlBonificOriginal),
+                    
+                    // Peso (tonelada) só conta se for faturamento
+                    TOTPESOLIQ: pesoOriginal, 
+                    DTPED: dtPed, DTSAIDA: dtSaida,
                     POSICAO: String(rawRow['POSICAO'] || ''),
-                    FILIAL: filialValue,
-                    CODSUPERVISOR: codSupervisor,
-                    ESTOQUECX: parseBrazilianNumber(rawRow['ESTOQUECX']),
                     ESTOQUEUNIT: parseBrazilianNumber(rawRow['ESTOQUEUNIT']),
-                    QTVENDA_EMBALAGEM_MASTER: isNaN(qtdeMaster) || qtdeMaster === 0 ? 0 : qtVenda / qtdeMaster
+                    QTVENDA_EMBALAGEM_MASTER: isNaN(qtdeMaster) || qtdeMaster === 0 ? 0 : qtVenda / qtdeMaster,
+                    // Garante que o tipo de venda correto é passado
+                    TIPOVENDA: tipoVenda 
+                    // --- FIM DA MODIFICAÇÃO ---
                 };
             });
         };
@@ -588,6 +627,7 @@
                     byClient: new Map(),
                     byPosition: new Map(),
                     byRede: new Map(),
+                    byTipoVenda: new Map()
                 },
                 history: {
                     bySupervisor: new Map(),
@@ -595,6 +635,7 @@
                     byPasta: new Map(),
                     bySupplier: new Map(),
                     byClient: new Map(),
+                    byTipoVenda: new Map()
                 }
             }
         };
@@ -686,7 +727,7 @@
             });
 
             const buildIndex = (data, indexSet, dataMap) => {
-                const { bySupervisor, byRca, byPasta, bySupplier, byClient, byPosition, byRede } = indexSet;
+                const { bySupervisor, byRca, byPasta, bySupplier, byClient, byPosition, byRede, byTipoVenda } = indexSet;
                 
                 data.forEach((sale, index) => {
                     const id = dataMap.size;
@@ -699,6 +740,7 @@
                     const client = sale.CODCLI || 'N/A';
                     const position = sale.POSICAO || 'N/A';
                     const rede = clientRamoMap.get(client) || 'N/A';
+                    const tipoVenda = sale.TIPOVENDA || 'N/A';
 
                     if (!bySupervisor.has(supervisor)) bySupervisor.set(supervisor, new Set());
                     bySupervisor.get(supervisor).add(id);
@@ -714,6 +756,11 @@
 
                     if (!byClient.has(client)) byClient.set(client, new Set());
                     byClient.get(client).add(id);
+
+                    if (byTipoVenda) {
+                        if (!byTipoVenda.has(tipoVenda)) byTipoVenda.set(tipoVenda, new Set());
+                        byTipoVenda.get(tipoVenda).add(id);
+                    }
 
                     if (byPosition) {
                         if (!byPosition.has(position)) byPosition.set(position, new Set());
@@ -874,6 +921,10 @@
         const vendedorFilterBtn = document.getElementById('vendedor-filter-btn');
         const vendedorFilterText = document.getElementById('vendedor-filter-text');
         const vendedorFilterDropdown = document.getElementById('vendedor-filter-dropdown');
+
+        const tipoVendaFilterBtn = document.getElementById('tipo-venda-filter-btn');
+        const tipoVendaFilterText = document.getElementById('tipo-venda-filter-text');
+        const tipoVendaFilterDropdown = document.getElementById('tipo-venda-filter-dropdown');
 
         const mainRedeGroupContainer = document.getElementById('main-rede-group-container');
         const mainComRedeBtn = document.getElementById('main-com-rede-btn');
@@ -1094,6 +1145,7 @@
         let selectedCitySellers = [];
         let selectedComparisonSellers = [];
         let selectedStockSellers = [];
+        let selectedTiposVenda = [];
         let selectedComparisonSuppliers = [];
         let selectedComparisonProducts = [];
         let selectedStockSuppliers = [];
@@ -1421,21 +1473,18 @@
             const salesByProduct = {};
             const faturamentoMap = new Map();
 
-            const salesByClient = new Map();
+            // --- INÍCIO DA MODIFICAÇÃO: KPIs de Cobertura e SKU ---
+            
+            // 1. Lógica de Positivação (Cobertura)
+            // Registar clientes que tiveram *qualquer* operação (Venda OU Bonificação)
+            const positiveClients = new Set();
             data.forEach(sale => {
-                if (!sale.CODCLI) return;
-                const clientTotal = salesByClient.get(sale.CODCLI) || 0;
-                salesByClient.set(sale.CODCLI, clientTotal + sale.VLVENDA);
-            });
-
-            let positiveClientsCount = 0;
-            const threshold = 1;
-            for (const total of salesByClient.values()) {
-                if (total > threshold) {
-                    positiveClientsCount++;
+                // Se o cliente teve Venda (VLVENDA > 0) OU Bonificação (VLBONIFIC > 0), ele é considerado positivado.
+                if (sale.CODCLI && (sale.VLVENDA > 0 || sale.VLBONIFIC > 0)) {
+                    positiveClients.add(sale.CODCLI);
                 }
-            }
-            summary.positivacaoCount = positiveClientsCount;
+            });
+            summary.positivacaoCount = positiveClients.size;
 
 
             let totalSkus = 0;
@@ -1443,7 +1492,9 @@
                 summary.totalFaturamento += item.VLVENDA;
                 summary.totalPeso += item.TOTPESOLIQ;
 
-                if(item.VLVENDA > 0) {
+                // 2. Lógica de SKU/PDV
+                // Contamos o SKU se for uma Venda OU uma Bonificação
+                if(item.VLVENDA > 0 || item.VLBONIFIC > 0) {
                     totalSkus++;
                 }
 
@@ -1474,7 +1525,9 @@
 
             const totalRelevantClients = clientBaseForPositivacao.length;
             summary.positivacaoPercent = totalRelevantClients > 0 ? (summary.positivacaoCount / totalRelevantClients) * 100 : 0;
+            // O cálculo do SKU/PDV agora usa a nova contagem de SKUs e a nova contagem de positivação
             summary.skuPdv = summary.positivacaoCount > 0 ? totalSkus / summary.positivacaoCount : 0;
+            // --- FIM DA MODIFICAÇÃO ---
 
             summary.faturamentoPorFornecedor = Object.fromEntries(faturamentoMap);
             summary.top10ProdutosFaturamento = Object.entries(salesByProduct).sort(([,a],[,b]) => b.faturamento - a.faturamento).slice(0, 10).map(([p, d]) => ({ produto: p, ...d }));
@@ -1743,6 +1796,15 @@
                     }
                 }
 
+                if (selectedTiposVenda.length > 0) {
+                    hasFilter = true;
+                    const tipoVendaIds = new Set();
+                    selectedTiposVenda.forEach(tipo => {
+                        (indices.byTipoVenda.get(tipo) || []).forEach(id => tipoVendaIds.add(id));
+                    });
+                    setsToIntersect.push(tipoVendaIds);
+                }
+
                 if (currentFornecedor) {
                     hasFilter = true;
                     if (indices.byPasta.has(currentFornecedor)) {
@@ -1803,13 +1865,14 @@
                     if (supervisor) matches = matches && order.SUPERV === supervisor;
                     if (selectedSellers.length > 0) matches = matches && selectedSellers.includes(order.NOME);
                 }
+                if (selectedTiposVenda.length > 0) matches = matches && selectedTiposVenda.includes(order.TIPOVENDA);
                 if (currentFornecedor) matches = matches && order.FORNECEDORES_LIST.includes(currentFornecedor);
                 if (selectedFornecedor) matches = matches && order.CODFORS_LIST && order.CODFORS_LIST.includes(selectedFornecedor);
                 if (posicao) matches = matches && order.POSICAO === posicao;
                 return matches;
             });
 
-            const isFiltered = !!supervisor || selectedSellers.length > 0 || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter || !!selectedFornecedor || !!posicao;
+            const isFiltered = !!supervisor || selectedSellers.length > 0 || !!codcli || !!currentFornecedor || !!mainRedeGroupFilter || !!selectedFornecedor || !!posicao || selectedTiposVenda.length > 0;
 
             const summary = calculateSummaryFromData(filteredSalesData, isFiltered, clientBaseForCoverage);
 
@@ -1886,6 +1949,20 @@
             return selectedArray;
         }
 
+        function updateTipoVendaFilter(dropdown, filterText, selectedArray, dataSource) {
+            const tiposVendaToShow = [...new Set(dataSource.map(item => item.TIPOVENDA).filter(Boolean))].sort();
+            selectedArray = selectedArray.filter(tipo => tiposVendaToShow.includes(tipo));
+            dropdown.innerHTML = '';
+            tiposVendaToShow.forEach(s => { 
+                const isChecked = selectedArray.includes(s); 
+                dropdown.innerHTML += `<label class="flex items-center p-2 hover:bg-slate-600 cursor-pointer"><input type="checkbox" class="form-checkbox h-4 w-4 bg-slate-800 border-slate-500 rounded text-teal-500 focus:ring-teal-500" value="${s}" ${isChecked ? 'checked' : ''}><span class="ml-2">${s}</span></label>`; 
+            });
+            if (selectedArray.length === 0 || selectedArray.length === tiposVendaToShow.length) filterText.textContent = 'Todos os Tipos';
+            else if (selectedArray.length === 1) filterText.textContent = selectedArray[0];
+            else filterText.textContent = `${selectedArray.length} tipos selecionados`;
+            return selectedArray;
+        }
+
         function updateRedeFilter(dropdown, buttonTextElement, selectedArray, dataSource, baseText = 'Com Rede') {
             const redesToShow = [...new Set(dataSource.map(item => item.ramo).filter(r => r && r !== 'N/A'))].sort();
             const validSelected = selectedArray.filter(rede => redesToShow.includes(rede));
@@ -1911,6 +1988,7 @@
             codcliFilter.value = '';
             currentFornecedor = '';
             selectedSellers = [];
+            selectedTiposVenda = [];
             mainRedeGroupFilter = '';
             selectedMainRedes = [];
             mainTableState.currentPage = 1;
@@ -1922,6 +2000,7 @@
             document.querySelectorAll('#fornecedor-toggle-container .fornecedor-btn').forEach(b => b.classList.remove('active'));
             populateSupervisors('supervisor-filter', allSalesData);
             selectedSellers = updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
+            selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
             updateAllVisuals();
         }
 
@@ -4322,6 +4401,19 @@
             fornecedorFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateAllVisuals(); });
             vendedorFilterBtn.addEventListener('click', () => vendedorFilterDropdown.classList.toggle('hidden'));
             vendedorFilterDropdown.addEventListener('change', (e) => { if (e.target.type === 'checkbox') { const { value, checked } = e.target; if (checked) selectedSellers.push(value); else selectedSellers = selectedSellers.filter(s => s !== value); selectedSellers = updateSellerFilter(supervisorFilter.value, vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData); mainTableState.currentPage = 1; updateAllVisuals(); } });
+            
+            tipoVendaFilterBtn.addEventListener('click', () => tipoVendaFilterDropdown.classList.toggle('hidden'));
+            tipoVendaFilterDropdown.addEventListener('change', (e) => { 
+                if (e.target.type === 'checkbox') { 
+                    const { value, checked } = e.target; 
+                    if (checked) selectedTiposVenda.push(value); 
+                    else selectedTiposVenda = selectedTiposVenda.filter(s => s !== value); 
+                    selectedTiposVenda = updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData); 
+                    mainTableState.currentPage = 1; 
+                    updateAllVisuals(); 
+                } 
+            });
+
             posicaoFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateAllVisuals(); });
             codcliFilter.addEventListener('input', (e) => e.target.value = e.target.value.replace(/[^0-9]/g, ''));
             codcliFilter.addEventListener('change', () => { mainTableState.currentPage = 1; updateAllVisuals(); });
@@ -4413,6 +4505,7 @@
 
             document.addEventListener('click', (e) => {
                 if (!vendedorFilterBtn.contains(e.target) && !vendedorFilterDropdown.contains(e.target)) vendedorFilterDropdown.classList.add('hidden');
+                if (!tipoVendaFilterBtn.contains(e.target) && !tipoVendaFilterDropdown.contains(e.target)) tipoVendaFilterDropdown.classList.add('hidden');
                 if (!cityVendedorFilterBtn.contains(e.target) && !cityVendedorFilterDropdown.contains(e.target)) cityVendedorFilterDropdown.classList.add('hidden');
                 if (!cityComRedeBtn.contains(e.target) && !cityRedeFilterDropdown.contains(e.target)) cityRedeFilterDropdown.classList.add('hidden');
                 if (!mainComRedeBtn.contains(e.target) && !mainRedeFilterDropdown.contains(e.target)) mainRedeFilterDropdown.classList.add('hidden');
@@ -4996,6 +5089,7 @@
         populateSupervisors('city-supervisor-filter', allSalesData);
         populateSupervisors('stock-supervisor-filter', [...allSalesData, ...allHistoryData]);
         updateSellerFilter('', vendedorFilterDropdown, vendedorFilterText, selectedSellers, allSalesData);
+        updateTipoVendaFilter(tipoVendaFilterDropdown, tipoVendaFilterText, selectedTiposVenda, allSalesData);
         updateSellerFilter('', cityVendedorFilterDropdown, cityVendedorFilterText, selectedCitySellers, allSalesData);
 
         updateRedeFilter(mainRedeFilterDropdown, mainComRedeBtnText, selectedMainRedes, allClientsData);
@@ -5098,6 +5192,7 @@
 
                 const scriptLogic = document.getElementById('report-logic-script').textContent;
 
+                // INÍCIO DO TEMPLATE MODIFICADO COM TEMA ESCURO
                 const reportTemplate = `
                     <!DOCTYPE html>
                     <html lang="pt-br">
@@ -5113,96 +5208,177 @@
                         <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"><\/script>
                         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
                         <style>
+                            /* Estilo base do tema escuro */
                             body { font-family: 'Inter', sans-serif; background-color: #0d1126; }
+                            
+                            /* Scrollbars personalizadas para o tema escuro */
                             ::-webkit-scrollbar { width: 8px; }
-                            ::-webkit-scrollbar-track { background: #0f172a; }
-                            ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
-                            ::-webkit-scrollbar-corner { background: #0f172a; }
-                            .sticky-header th { position: sticky; top: 0; z-index: 10; background-color: #1d2347; }
+                            ::-webkit-scrollbar-track { background: #161e3d; } /* Cor de fundo da trilha */
+                            ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 10px; } /* Cor do "polegar" */
+                            ::-webkit-scrollbar-corner { background: #161e3d; }
+                            
+                            /* Cabeçalhos de tabela fixos (sticky) */
+                            .sticky-header th { 
+                                position: sticky; 
+                                top: 0; 
+                                z-index: 10; 
+                                background-color: #161e3d; /* Cor de fundo escura para o cabeçalho */
+                                border-bottom: 2px solid #2d3748; /* Borda escura */
+                            }
                             .hidden { display: none; }
-                            .metric-btn.active, .fornecedor-btn.active, .comparison-toggle-btn.active, .group-btn.active, #main-rede-group-container > div > button.active, #city-rede-group-container > div > button.active, #comparison-rede-group-container > div > button.active, #stock-rede-group-container > div > button.active { background-color: #0d9488; color: #FFF; }
-                            .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+                            
+                            /* Estilo de botões ativos (filtros, toggles) */
+                            .metric-btn.active, .fornecedor-btn.active, .comparison-toggle-btn.active, .group-btn.active, #main-rede-group-container > div > button.active, #city-rede-group-container > div > button.active, #comparison-rede-group-container > div > button.active, #stock-rede-group-container > div > button.active { 
+                                background-color: #38b2ac; /* teal-500 */
+                                color: #FFF; 
+                            }
+                            
+                            /* Overlay do modal */
+                            .modal-overlay { 
+                                position: fixed; 
+                                top: 0; left: 0; right: 0; bottom: 0; 
+                                background: rgba(0,0,0,0.7); /* Overlay mais escuro */
+                                display: flex; 
+                                align-items: center; 
+                                justify-content: center; 
+                                z-index: 1000; 
+                            }
+                            
+                            /* Tooltip */
                             .tooltip { position: relative; display: inline-block; cursor: pointer; }
-                            .tooltip .tooltip-text { visibility: hidden; width: auto; min-width: 80px; background-color: #1e293b; color: #fff; text-align: center; border-radius: 6px; padding: 5px 8px; position: absolute; z-index: 1001; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+                            .tooltip .tooltip-text { 
+                                visibility: hidden; 
+                                width: auto; 
+                                min-width: 80px; 
+                                background-color: #1f2937; /* bg-gray-800 */
+                                color: #fff; 
+                                text-align: center; 
+                                border-radius: 6px; 
+                                padding: 5px 8px; 
+                                position: absolute; 
+                                z-index: 1001; 
+                                bottom: 125%; 
+                                left: 50%; 
+                                transform: translateX(-50%); 
+                                opacity: 0; 
+                                transition: opacity 0.3s; 
+                                pointer-events: none; 
+                                white-space: nowrap; 
+                            }
                             .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+                            
+                            /* Scrollbar customizada para elementos internos */
                             .custom-scrollbar::-webkit-scrollbar { width: 8px; }
-                            .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
-                            .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 10px; }
-                            .kpi-card { background-color: #1d2347; border-radius: 0.5rem; padding: 1.5rem; text-align: center; border: 1px solid #334155; }
-                            .stock-trend-btn.active { outline: 2px solid #fff; outline-offset: 2px; transform: scale(1.1); }
-                            input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+                            .custom-scrollbar::-webkit-scrollbar-track { background: #161e3d; }
+                            .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #4a5568; border-radius: 10px; }
+                            
+                            /* Estilo dos cartões KPI */
+                            .kpi-card { 
+                                background-color: #1d2347; /* Fundo do cartão */
+                                border-radius: 0.5rem; 
+                                padding: 1.5rem; 
+                                text-align: center; 
+                                border: 1px solid #2d3748; /* Borda (slate-700) */
+                                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); 
+                            }
+                            
+                            /* Botão de tendência de estoque ativo */
+                            .stock-trend-btn.active { 
+                                outline: 2px solid #38b2ac; /* Destaque teal-500 */
+                                outline-offset: 2px; 
+                                transform: scale(1.1); 
+                            }
+                            
+                            /* Remove setas de input[type=number] */
+                            input[type=number]::-webkit-inner-spin-button, 
+                            input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
                             input[type=number] { -moz-appearance: textfield; }
                         </style>
                     </head>
-                    <body class="bg-slate-900 text-slate-200 antialiased">
+                    <body class="bg-[#0d1126] text-slate-300 antialiased">
                         <div id="main-dashboard">
                             <div class="container mx-auto p-4 sm:p-6 lg:p-8">
-                                <header class="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
-                                    <div class="text-center sm:text-left">
-                                        <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1>
-                                        <p class="text-slate-400 mt-1">Dados atualizados em: ${generationDate}</p>
+                                <!-- Cabeçalho com gradiente escuro -->
+                                <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
+                                    <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
+                                        <div class="text-center sm:text-left">
+                                            <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1>
+                                            <p class="text-slate-300 mt-1">Dados atualizados em: ${generationDate}</p>
+                                        </div>
                                     </div>
                                 </header>
 
+                                <!-- KPIs com bordas e cores atualizadas -->
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                                    <div class="kpi-card bg-purple-800/50 border-purple-700">
-                                        <h3 class="text-slate-300 font-medium">Volume Tons</h3>
+                                    <div class="kpi-card border-t-4 border-indigo-500">
+                                        <h3 class="text-slate-400 font-medium uppercase text-sm">Volume Tons</h3>
                                         <p id="total-peso" class="text-4xl font-bold text-white my-2">0,0</p>
                                     </div>
-                                    <div class="kpi-card bg-rose-800/50 border-rose-700">
-                                        <h3 class="text-slate-300 font-medium">Faturamento R$</h3>
+                                    <div class="kpi-card border-t-4 border-teal-500">
+                                        <h3 class="text-slate-400 font-medium uppercase text-sm">Faturamento R$</h3>
                                         <p id="total-vendas" class="text-4xl font-bold text-white my-2">R$ 0,00</p>
                                     </div>
-                                    <div class="kpi-card bg-blue-800/50 border-blue-700">
-                                        <h3 class="text-slate-300 font-medium">SKU/PDV</h3>
+                                    <div class="kpi-card border-t-4 border-green-500">
+                                        <h3 class="text-slate-400 font-medium uppercase text-sm">SKU/PDV</h3>
                                         <p id="kpi-sku-pdv" class="text-4xl font-bold text-white my-2">0,0</p>
                                     </div>
-                                    <div class="kpi-card bg-emerald-800/50 border-emerald-700">
-                                        <h3 class="text-slate-300 font-medium">Cobertura PDVs</h3>
+                                    <div class="kpi-card border-t-4 border-purple-500">
+                                        <h3 class="text-slate-400 font-medium uppercase text-sm">Cobertura PDVs</h3>
                                         <p id="kpi-positivacao" class="text-4xl font-bold text-white my-2">0,0%</p>
                                         <p id="kpi-positivacao-percent" class="text-sm text-slate-400 -mt-1">0 PDVs</p>
                                     </div>
                                 </div>
 
                                 <div class="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-                                    <div id="fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2"><button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button><button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button></div>
+                                    <!-- Botões de Categoria (Pepsico/Multimarcas) -->
+                                    <div id="fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2">
+                                        <button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button>
+                                        <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button>
+                                    </div>
+                                    <!-- Botões de Navegação -->
                                     <div class="flex gap-2 w-full sm:w-auto">
-                                        <button id="viewChartBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg hidden">Gráficos</button>
-                                        <button id="viewTableBtn" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Pedidos</button>
-                                        <button id="viewComparisonBtn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg">Comparativo</button>
-                                        <button id="viewStockBtn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Estoque</button>
-                                        <button id="viewCoverageBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Cobertura</button>
+                                        <button id="viewChartBtn" class="w-full bg-teal-500 hover:bg-teal-400 text-white font-bold py-2 px-4 rounded-lg hidden">Gráficos</button>
+                                        <button id="viewTableBtn" class="w-full bg-teal-500 hover:bg-teal-400 text-white font-bold py-2 px-4 rounded-lg">Pedidos</button>
+                                        <button id="viewComparisonBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg">Comparativo</button>
+                                        <button id="viewStockBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Estoque</button>
+                                        <button id="viewCoverageBtn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg">Cobertura</button>
                                     </div>
                                 </div>
-                                <div id="main-filters" class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                                
+                                <!-- Container de Filtros -->
+                                <div id="main-filters" class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
                                     <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+                                        <!-- Filtro de Rede -->
                                         <div id="main-rede-filter-wrapper" class="relative">
-                                            <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
+                                            <label class="block mb-2 text-sm font-medium text-slate-400">Rede</label>
                                             <div id="main-rede-group-container" class="inline-flex rounded-md shadow-sm" role="group">
-                                                <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-l-lg hover:bg-slate-500">Todos</button>
-                                                <button type="button" data-group="com_rede" id="main-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 hover:bg-slate-500 border-t border-b border-slate-700 flex items-center gap-2">
+                                                <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-l-lg hover:bg-slate-600">Todos</button>
+                                                <button type="button" data-group="com_rede" id="main-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border-t border-b border-slate-600 hover:bg-slate-600 flex items-center gap-2">
                                                     <span id="main-com-rede-btn-text">Com Rede</span>
-                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                    <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                                                 </button>
-                                                <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-r-lg hover:bg-slate-500">Sem Rede</button>
+                                                <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-r-lg hover:bg-slate-600">Sem Rede</button>
                                             </div>
-                                            <div id="main-rede-filter-dropdown" class="hidden absolute z-20 w-56 mt-1 top-full left-0 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
+                                            <div id="main-rede-filter-dropdown" class="hidden absolute z-20 w-56 mt-1 top-full left-0 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left text-white"></div>
                                         </div>
-                                        <div><label for="supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label><select id="supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todos</option></select></div>
-                                        <div class="relative"><label for="vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label><button id="vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center"><span id="vendedor-filter-text">Todos Vendedores</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div></div>
-                                        <div><label for="fornecedor-filter" class="block mb-2 text-sm font-medium text-slate-300">Fornecedor</label><select id="fornecedor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todos</option></select></div>
-                                        <div><label for="codcli-filter" class="block mb-2 text-sm font-medium text-slate-300">Cód. Cliente</label><input type="text" id="codcli-filter" placeholder="Digite o código..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"></div>
-                                        <div><label for="posicao-filter" class="block mb-2 text-sm font-medium text-slate-300">Posição</label><select id="posicao-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todas</option><option value="L">Liberado</option><option value="M">Montado</option><option value="F">Faturado</option></select></div>
-                                        <div class="md:col-start-6"><button id="clear-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button></div>
+                                        <!-- Outros Filtros -->
+                                        <div><label for="supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                                        <div class="relative"><label for="vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="vendedor-filter-text">Todos Vendedores</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                        <div class="relative"><label for="tipo-venda-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Tipo Venda</label><button id="tipo-venda-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="tipo-venda-filter-text">Todos os Tipos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="tipo-venda-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                        <div><label for="fornecedor-filter" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><select id="fornecedor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                                        <div><label for="codcli-filter" class="block mb-2 text-sm font-medium text-slate-400">Cód. Cliente</label><input type="text" id="codcli-filter" placeholder="Digite o código..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"></div>
+                                        <div><label for="posicao-filter" class="block mb-2 text-sm font-medium text-slate-400">Posição</label><select id="posicao-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todas</option><option value="L">Liberado</option><option value="M">Montado</option><option value="F">Faturado</option></select></div>
+                                        <div class="md:col-start-6"><button id="clear-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button></div>
                                     </div>
                                 </div>
                                 <main id="app-container">
                                     <div id="chartView" class="">
-                                        <div class="mb-6 bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                        <!-- Gráfico de Tendência -->
+                                        <div class="mb-6 bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
                                             <div class="flex justify-between items-center mb-4">
                                                 <div class="w-1/3">
                                                     <label for="main-holiday-picker-btn" class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label>
-                                                    <button id="main-holiday-picker-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left">Selecionar Feriados</button>
+                                                    <button id="main-holiday-picker-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left focus:outline-none focus:ring-2 focus:ring-teal-500">Selecionar Feriados</button>
                                                 </div>
                                                 <div class="w-1/3 text-center">
                                                     <h2 class="text-lg font-semibold text-white">Tendência de Faturamento</h2>
@@ -5211,260 +5387,253 @@
                                             </div>
                                             <div id="trendChartContainer" class="relative h-80"></div>
                                         </div>
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 id="sales-by-person-title" class="text-lg font-semibold text-white mb-4 text-center">Vendas por Supervisor</h2><div id="salesByPersonChartContainer" class="relative h-80"></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 id="faturamentoPorFornecedorTitle" class="text-lg font-semibold text-white mb-4 text-center">Faturamento por Categoria</h2><div id="faturamentoPorFornecedorChartContainer" class="relative h-80"></div></div></div>
-                                        <div class="mt-6 bg-[#1d2347] p-4 rounded-lg border border-slate-700"><div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white">Vendas por Produto</h2><div class="bg-slate-700 rounded-lg p-1 flex"><button id="faturamentoBtn" class="metric-btn active px-3 py-1 text-sm rounded-md">Faturamento</button><button id="pesoBtn" class="metric-btn px-3 py-1 text-sm rounded-md">Peso Kg</button></div></div><div id="salesByProductBarChartContainer" class="relative h-80"></div></div>
+                                        <!-- Gráficos menores -->
+                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 id="sales-by-person-title" class="text-lg font-semibold text-white mb-4 text-center">Vendas por Supervisor</h2><div id="salesByPersonChartContainer" class="relative h-80"></div></div>
+                                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 id="faturamentoPorFornecedorTitle" class="text-lg font-semibold text-white mb-4 text-center">Faturamento por Categoria</h2><div id="faturamentoPorFornecedorChartContainer" class="relative h-80"></div></div>
+                                        </div>
+                                        <!-- Gráfico de Produtos -->
+                                        <div class="mt-6 bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
+                                            <div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white">Vendas por Produto</h2>
+                                                <div class="bg-slate-700 rounded-lg p-1 flex">
+                                                    <button id="faturamentoBtn" class="metric-btn active px-3 py-1 text-sm rounded-md text-white">Faturamento</button>
+                                                    <button id="pesoBtn" class="metric-btn px-3 py-1 text-sm rounded-md text-slate-300">Peso Kg</button>
+                                                </div>
+                                            </div>
+                                            <div id="salesByProductBarChartContainer" class="relative h-80"></div>
+                                        </div>
+                                        <!-- Botões de Navegação Secundários -->
                                         <div class="mt-6 space-y-3">
-                                            <button id="show-weekly-btn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg">Gráficos Semanais</button>
+                                            <button id="show-weekly-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-lg">Gráficos Semanais</button>
                                             <button id="show-city-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg">Gráficos por Cidade</button>
                                             <button id="viewInnovationsBtn" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-lg">Inovações</button>
                                         </div>
                                     </div>
+                                    <!-- Visão de Tabela (Pedidos) -->
                                     <div id="tableView" class="hidden">
-                                        <div class="overflow-x-auto bg-[#1d2347] rounded-lg border border-slate-700" style="max-height: 60vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Nº Pedido</th><th class="px-4 py-3">Cód. Cliente</th><th class="px-4 py-3">Vendedor</th><th class="px-4 py-3">Fornecedor</th><th class="px-4 py-3">Data Pedido</th><th class="px-4 py-3">Data Fat.</th><th class="px-4 py-3 text-right">Peso Total</th><th class="px-4 py-3 text-right">Faturamento Total</th><th class="px-4 py-3 text-center">Posição</th></tr></thead><tbody id="report-table-body" class="divide-y divide-slate-700"></tbody></table></div>
+                                        <div class="overflow-x-auto bg-[#1d2347] rounded-lg border border-slate-700 shadow-sm" style="max-height: 60vh;">
+                                            <table class="min-w-full text-sm text-left text-slate-300">
+                                                <thead class="text-xs text-slate-400 uppercase sticky-header"> <!-- Sticky header já estilizado no <style> -->
+                                                    <tr><th class="px-4 py-3">Nº Pedido</th><th class="px-4 py-3">Cód. Cliente</th><th class="px-4 py-3">Vendedor</th><th class="px-4 py-3">Fornecedor</th><th class="px-4 py-3">Data Pedido</th><th class="px-4 py-3">Data Fat.</th><th class="px-4 py-3 text-right">Peso Total</th><th class="px-4 py-3 text-right">Faturamento Total</th><th class="px-4 py-3 text-center">Posição</th></tr>
+                                                </thead>
+                                                <tbody id="report-table-body" class="divide-y divide-slate-700"></tbody>
+                                            </table>
+                                        </div>
+                                        <!-- Paginação da Tabela -->
                                         <div id="table-pagination-controls" class="hidden mt-4 flex justify-between items-center">
-                                            <button id="prev-page-btn" class="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Anterior</button>
+                                            <button id="prev-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Anterior</button>
                                             <span id="page-info-text" class="text-slate-400">Página 1 de 1</span>
-                                            <button id="next-page-btn" class="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Próxima</button>
+                                            <button id="next-page-btn" class="bg-slate-700 border border-slate-600 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg disabled:opacity-50" disabled>Próxima</button>
                                         </div>
                                     </div>
                                 </main>
                             </div>
                         </div>
+                        
+                        <!-- Ecrã de Cidades -->
                         <div id="city-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
+                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
+                                <div class="flex justify-between items-center"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Vendas por Cidade</p></div><button id="back-to-main-from-city-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+                            </header>
                             <div id="city-view-loader" class="text-center p-16"><p class="text-lg text-slate-400">Carregando dados...</p></div>
                             <div id="city-view-content" class="hidden">
-                                <div class="flex justify-between items-center mb-6"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Vendas por Cidade</p></div><button id="back-to-main-from-city-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
-                                <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                                <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
                                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                                        <!-- Filtro de Rede (Cidades) -->
                                         <div id="city-rede-filter-wrapper" class="relative">
-                                            <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
+                                            <label class="block mb-2 text-sm font-medium text-slate-400">Rede</label>
                                             <div id="city-rede-group-container" class="inline-flex rounded-md shadow-sm" role="group">
-                                                <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-l-lg hover:bg-slate-500">Todos</button>
+                                                <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-l-lg hover:bg-slate-600">Todos</button>
                                                 <div class="relative">
-                                                    <button type="button" data-group="com_rede" id="city-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 hover:bg-slate-500 border-t border-b border-slate-700 flex items-center justify-center gap-2">
+                                                    <button type="button" data-group="com_rede" id="city-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border-t border-b border-slate-600 hover:bg-slate-600 flex items-center justify-center gap-2">
                                                         <span id="city-com-rede-btn-text">Com Rede</span>
-                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                        <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
                                                     </button>
-                                                    <div id="city-rede-filter-dropdown" class="hidden absolute z-20 w-56 mt-1 top-full left-0 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
+                                                    <div id="city-rede-filter-dropdown" class="hidden absolute z-20 w-56 mt-1 top-full left-0 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left text-white"></div>
                                                 </div>
-                                                <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-r-lg hover:bg-slate-500">Sem Rede</button>
+                                                <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-r-lg hover:bg-slate-600">Sem Rede</button>
                                             </div>
                                         </div>
-                                        <div><label for="city-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label><select id="city-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"><option value="">Todos</option></select></div>
-                                        <div class="relative"><label for="city-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label><button id="city-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center"><span id="city-vendedor-filter-text">Todos</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button><div id="city-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div></div>
-                                        <div class="relative"><label for="city-name-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label><input type="text" id="city-name-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white" autocomplete="off"><div id="city-suggestions" class="absolute z-10 w-full bg-slate-700 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div></div>
-                                        <div><label for="city-codcli-filter" class="block mb-2 text-sm font-medium text-slate-300">Cód. Cliente</label><input type="text" id="city-codcli-filter" placeholder="Digite o código..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white"></div>
+                                        <!-- Outros Filtros (Cidades) -->
+                                        <div><label for="city-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="city-supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                                        <div class="relative"><label for="city-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="city-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="city-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="city-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                        <div class="relative"><label for="city-name-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="city-name-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                        <div><label for="city-codcli-filter" class="block mb-2 text-sm font-medium text-slate-400">Cód. Cliente</label><input type="text" id="city-codcli-filter" placeholder="Digite o código..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"></div>
                                     </div>
                                     <div class="mt-4 flex justify-center">
-                                        <button id="clear-city-filters-btn" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button>
+                                        <button id="clear-city-filters-btn" class="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button>
                                     </div>
                                 </div>
-                                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><div class="flex justify-between items-center mb-4"><div class="w-1/4"><span class="text-xl font-bold text-cyan-400">Top 10</span></div><div class="w-1/2 text-center"><h2 id="city-chart-title" class="text-lg font-semibold text-white"></h2></div><div class="w-1/4 text-right"><p class="text-slate-400 text-sm">Total Vendido</p><p id="total-faturamento-cidade" class="text-xl font-bold text-emerald-400">R$ 0,00</p></div></div><div id="salesByClientInCityChartContainer" class="relative h-96"></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white mb-4 text-center">Status dos Clientes</h2><div id="customerStatusChartContainer" class="relative h-96 flex items-center justify-center"></div></div></div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg mt-6 border border-slate-700"><div class="flex justify-between items-center mb-4 px-4"><h3 class="text-lg font-semibold text-white">Clientes Ativos no Mês</h3><button id="export-active-pdf-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Exportar Relatório</button></div><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Nome Fantasia</th><th class="px-4 py-3 text-right">Faturamento</th><th class="px-4 py-3">Cidade</th><th class="px-4 py-3">Bairro</th><th class="px-4 py-3">RCA 1</th><th class="px-4 py-3">RCA 2</th></tr></thead><tbody id="city-active-detail-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg mt-6 border border-slate-700"><div class="flex justify-between items-center mb-4 px-4"><h3 class="text-lg font-semibold text-white">Clientes S/ Vendas no Mês</h3><button id="export-inactive-pdf-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Exportar Relatório</button></div><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Nome Fantasia</th><th class="px-4 py-3">Cidade</th><th class="px-4 py-3">Bairro</th><th class="px-4 py-3 text-center">Última Compra</th><th class="px-4 py-3">RCA 1</th><th class="px-4 py-3">RCA 2</th></tr></thead><tbody id="city-inactive-detail-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
+                                <!-- Gráficos (Cidades) -->
+                                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                                    <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
+                                        <div class="flex justify-between items-center mb-4"><div class="w-1/4"><span class="text-xl font-bold text-indigo-400">Top 10</span></div><div class="w-1/2 text-center"><h2 id="city-chart-title" class="text-lg font-semibold text-white"></h2></div><div class="w-1/4 text-right"><p class="text-slate-400 text-sm">Total Vendido</p><p id="total-faturamento-cidade" class="text-xl font-bold text-green-400">R$ 0,00</p></div></div><div id="salesByClientInCityChartContainer" class="relative h-96"></div>
+                                    </div>
+                                    <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 class="text-lg font-semibold text-white mb-4 text-center">Status dos Clientes</h2><div id="customerStatusChartContainer" class="relative h-96 flex items-center justify-center"></div></div>
+                                </div>
+                                <!-- Tabelas (Cidades) -->
+                                <div class="bg-[#1d2347] p-4 rounded-lg mt-6 border border-slate-700 shadow-sm"><div class="flex justify-between items-center mb-4 px-4"><h3 class="text-lg font-semibold text-white">Clientes Ativos no Mês</h3><button id="export-active-pdf-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-sm">Exportar Relatório</button></div><div class="overflow-x-auto custom-scrollbar" style="max-height: 40vh;"><table class="min-w-full text-sm text-left text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Nome Fantasia</th><th class="px-4 py-3 text-right">Faturamento</th><th class="px-4 py-3">Cidade</th><th class="px-4 py-3">Bairro</th><th class="px-4 py-3">RCA 1</th><th class="px-4 py-3">RCA 2</th></tr></thead><tbody id="city-active-detail-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
+                                <div class="bg-[#1d2347] p-4 rounded-lg mt-6 border border-slate-700 shadow-sm"><div class="flex justify-between items-center mb-4 px-4"><h3 class="text-lg font-semibold text-white">Clientes S/ Vendas no Mês</h3><button id="export-inactive-pdf-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg text-sm">Exportar Relatório</button></div><div class="overflow-x-auto custom-scrollbar" style="max-height: 40vh;"><table class="min-w-full text-sm text-left text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-4 py-3">Código</th><th class="px-4 py-3">Nome Fantasia</th><th class="px-4 py-3">Cidade</th><th class="px-4 py-3">Bairro</th><th class="px-4 py-3 text-center">Última Compra</th><th class="px-4 py-3">RCA 1</th><th class="px-4 py-3">RCA 2</th></tr></thead><tbody id="city-inactive-detail-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
                             </div>
                         </div>
+                        
+                        <!-- Ecrã Semanal -->
                         <div id="weekly-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <div class="flex justify-between items-center mb-6"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Acompanhamento Semanal</p></div><button id="back-to-main-from-weekly-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700"><div class="flex flex-col sm:flex-row justify-between items-center gap-4"><div id="weekly-fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2"><button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button><button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button></div><button id="clear-weekly-filters-btn" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button></div><div class="mt-4"><label class="block text-sm font-medium text-slate-300 mb-2">Filtrar Supervisores</label><div id="weekly-supervisor-filter" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"></div></div></div>
-                            <div class="grid grid-cols-1 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white text-center">Faturamento Mensal por Dia da Semana</h2><div class="text-right"><p class="text-slate-400 text-sm">Total do Mês</p><p id="total-mes-semanal" class="text-xl font-bold text-emerald-400">R$ 0,00</p></div></div><div id="weeklySalesChartContainer" class="relative h-96"></div><div class="mt-6 border-t border-slate-700 pt-4"><h3 class="text-md font-semibold text-white mb-3 text-center">Resumo de Faturamento Semanal</h3><div class="overflow-x-auto"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase"><tr><th class="px-4 py-2 bg-slate-700/50 rounded-l-lg">Semana</th><th class="px-4 py-2 bg-slate-700/50 text-right rounded-r-lg">Faturamento Total</th></tr></thead><tbody id="weekly-summary-table-body" class="divide-y divide-slate-700"></tbody></table></div></div></div><div class="grid grid-cols-1 gap-6"><div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Positivação</h2><div id="positivacaoChartContainer" class="relative h-80"></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Mix de Produtos (Por PDV)</h2><div id="mixChartContainer" class="relative h-80"></div></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white mb-4 text-center">Top 10 Vendedores (Faturamento)</h2><div id="topSellersChartContainer" class="relative h-80"></div></div></div></div>
+                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
+                                <div class="flex justify-between items-center"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Acompanhamento Semanal</p></div><button id="back-to-main-from-weekly-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+                            </header>
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
+                                <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                                    <div id="weekly-fornecedor-toggle-container" class="w-full sm:w-auto rounded-lg p-1 flex justify-center sm:justify-start gap-2"><button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">PEPSICO</button><button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1 sm:flex-none">MULTIMARCAS</button></div>
+                                    <button id="clear-weekly-filters-btn" class="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg">Limpar Filtros</button>
+                                </div>
+                                <div class="mt-4"><label class="block text-sm font-medium text-slate-400 mb-2">Filtrar Supervisores</label><div id="weekly-supervisor-filter" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 text-slate-300"></div></div>
+                            </div>
+                            <div class="grid grid-cols-1 gap-6">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
+                                    <div class="flex justify-between items-center mb-4"><h2 class="text-lg font-semibold text-white text-center">Faturamento Mensal por Dia da Semana</h2><div class="text-right"><p class="text-slate-400 text-sm">Total do Mês</p><p id="total-mes-semanal" class="text-xl font-bold text-green-400">R$ 0,00</p></div></div><div id="weeklySalesChartContainer" class="relative h-96"></div>
+                                    <div class="mt-6 border-t border-slate-700 pt-4"><h3 class="text-md font-semibold text-white mb-3 text-center">Resumo de Faturamento Semanal</h3><div class="overflow-x-auto"><table class="min-w-full text-sm text-left text-slate-300"><thead class="text-xs text-slate-400 uppercase"><tr><th class="px-4 py-2 bg-slate-800 rounded-l-lg">Semana</th><th class="px-4 py-2 bg-slate-800 text-right rounded-r-lg">Faturamento Total</th></tr></thead><tbody id="weekly-summary-table-body" class="divide-y divide-slate-700"></tbody></table></div></div>
+                                </div>
+                                <div class="grid grid-cols-1 gap-6"><div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Positivação</h2><div id="positivacaoChartContainer" class="relative h-80"></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 class="text-lg font-semibold text-white mb-4 text-center">Ranking de Mix de Produtos (Por PDV)</h2><div id="mixChartContainer" class="relative h-80"></div></div></div><div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 class="text-lg font-semibold text-white mb-4 text-center">Top 10 Vendedores (Faturamento)</h2><div id="topSellersChartContainer" class="relative h-80"></div></div></div>
+                            </div>
                         </div>
+                        
+                        <!-- Ecrã Comparativo -->
                         <div id="comparison-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <div class="flex justify-between items-center mb-6"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Comparativo entre Meses</p></div><button id="back-to-main-from-comparison-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
+                                <div class="flex justify-between items-center"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Comparativo entre Meses</p></div><button id="back-to-main-from-comparison-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+                            </header>
+                            <!-- Filtros (Comparativo) -->
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
                                 <div id="comparison-rede-filter-wrapper" class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
                                     <div class="relative w-full sm:w-1/2">
-                                        <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
+                                        <label class="block mb-2 text-sm font-medium text-slate-400">Rede</label>
                                         <div id="comparison-rede-group-container" class="inline-flex rounded-md shadow-sm w-full" role="group">
-                                            <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-l-lg hover:bg-slate-500 flex-1">Todos</button>
-                                            <button type="button" data-group="com_rede" id="comparison-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 hover:bg-slate-500 border-t border-b border-slate-700 flex items-center justify-center gap-2 flex-1">
+                                            <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-l-lg hover:bg-slate-600 flex-1">Todos</button>
+                                            <button type="button" data-group="com_rede" id="comparison-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border-t border-b border-slate-600 hover:bg-slate-600 flex items-center justify-center gap-2 flex-1">
                                                 <span id="comparison-com-rede-btn-text">Com Rede</span>
-                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
                                             </button>
-                                            <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-r-lg hover:bg-slate-500 flex-1">Sem Rede</button>
+                                            <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-r-lg hover:bg-slate-600 flex-1">Sem Rede</button>
                                         </div>
-                                        <div id="comparison-rede-filter-dropdown" class="hidden absolute z-20 w-full mt-1 top-full left-0 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
+                                        <div id="comparison-rede-filter-dropdown" class="hidden absolute z-20 w-full mt-1 top-full left-0 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left text-white"></div>
                                     </div>
                                     <div class="w-full sm:w-1/2">
-                                        <label class="block mb-2 text-sm font-medium text-slate-300">Pasta</label>
+                                        <label class="block mb-2 text-sm font-medium text-slate-400">Pasta</label>
                                         <div id="comparison-fornecedor-toggle-container" class="w-full rounded-lg p-1 flex justify-center gap-2">
-                                            <button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1">PEPSICO</button>
-                                            <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1">MULTIMARCAS</button>
+                                            <button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1">PEPSICO</button>
+                                            <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1">MULTIMARCAS</button>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                                    <div>
-                                        <label for="comparison-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
-                                        <select id="comparison-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
-                                            <option value="">Todos</option>
-                                        </select>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="comparison-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label>
-                                        <button id="comparison-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="comparison-vendedor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="comparison-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="comparison-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Fornecedor</label>
-                                        <button id="comparison-supplier-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="comparison-supplier-filter-text">Todos Fornecedores</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="comparison-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="comparison-city-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label>
-                                        <input type="text" id="comparison-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white" autocomplete="off">
-                                        <div id="comparison-city-suggestions" class="absolute z-10 w-full bg-slate-700 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
+                                    <div><label for="comparison-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="comparison-supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                                    <div class="relative"><label for="comparison-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="comparison-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="comparison-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="comparison-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                    <div class="relative"><label for="comparison-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><button id="comparison-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="comparison-supplier-filter-text">Todos Fornecedores</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="comparison-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                    <div class="relative"><label for="comparison-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="comparison-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="comparison-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
                                 </div>
-
                                 <div class="grid grid-cols-1 mt-4">
                                     <div class="relative">
-                                        <label for="comparison-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Filtrar por Produto</label>
-                                        <button id="comparison-product-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="comparison-product-filter-text">Todos os Produtos</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="comparison-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg">
-                                            <div class="p-2 border-b border-slate-600">
-                                                <input type="text" id="comparison-product-search-input" placeholder="Buscar produto..." class="bg-slate-800 text-xs rounded-lg block w-full p-2 border border-slate-600 placeholder-slate-400 text-white">
-                                            </div>
-                                            <div id="comparison-product-list" class="max-h-60 overflow-y-auto custom-scrollbar">
-                                            </div>
+                                        <label for="comparison-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Filtrar por Produto</label>
+                                        <button id="comparison-product-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="comparison-product-filter-text">Todos os Produtos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button>
+                                        <div id="comparison-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg">
+                                            <div class="p-2 border-b border-slate-700"><input type="text" id="comparison-product-search-input" placeholder="Buscar produto..." class="bg-slate-600 text-xs rounded-lg block w-full p-2 border border-slate-500 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"></div>
+                                            <div id="comparison-product-list" class="max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end border-t border-slate-700 pt-4 mt-4">
-                                    <div>
-                                        <label for="comparison-filial-filter" class="block mb-2 text-sm font-medium text-slate-300">Filial</label>
-                                        <select id="comparison-filial-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
-                                            <option value="ambas" selected>Ambas</option>
-                                            <option value="05">Filial 05</option>
-                                            <option value="08">Filial 08</option>
-                                        </select>
-                                    </div>
-                                    <div class="flex items-end"><div class="w-full"><label for="comparison-holiday-picker-btn" class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label><button id="comparison-holiday-picker-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left">Selecionar Feriados</button></div></div>
+                                    <div><label for="comparison-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="comparison-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
+                                    <div class="flex items-end"><div class="w-full"><label for="comparison-holiday-picker-btn" class="block mb-2 text-sm font-medium text-slate-400">Feriados do Mês</label><button id="comparison-holiday-picker-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left focus:outline-none focus:ring-2 focus:ring-teal-500">Selecionar Feriados</button></div></div>
                                     <button id="comparison-tendency-toggle" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 px-4 rounded-lg">Calcular Tendência</button>
-                                    <button id="clear-comparison-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+                                    <button id="clear-comparison-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
                                 </div>
                             </div>
-                            <div id="comparison-kpi-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6"></div>
+                            <!-- KPIs (Comparativo) -->
+                            <div id="comparison-kpi-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
+                                <!-- KPIs serão renderizados aqui pelo JS -->
+                            </div>
+                            <!-- Gráficos (Comparativo) -->
                             <div class="grid grid-cols-1 gap-6">
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
                                     <div class="flex justify-center items-center mb-4 relative">
                                         <h2 id="comparison-chart-title" class="text-lg font-semibold text-white text-center">Comparativo de Faturamento Semanal</h2>
                                         <div class="absolute right-0 top-0 bottom-0 flex items-center">
                                             <div id="comparison-chart-toggle" class="flex bg-slate-700 rounded-lg p-1">
-                                                <button id="toggle-weekly-btn" class="comparison-toggle-btn active px-3 py-1 text-sm rounded-md">Semanal</button>
-                                                <button id="toggle-monthly-btn" class="comparison-toggle-btn px-3 py-1 text-sm rounded-md">Mensal</button>
+                                                <button id="toggle-weekly-btn" class="comparison-toggle-btn active px-3 py-1 text-sm rounded-md text-white">Semanal</button>
+                                                <button id="toggle-monthly-btn" class="comparison-toggle-btn px-3 py-1 text-sm rounded-md text-slate-300">Mensal</button>
                                             </div>
                                         </div>
                                     </div>
                                     <div id="weeklyComparisonChartContainer" class="relative h-96"></div>
                                     <div id="monthlyComparisonChartContainer" class="relative h-96 hidden"></div>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
                                     <h2 class="text-lg font-semibold text-white text-center mb-4">Faturamento por Dia da Semana</h2>
                                     <div id="dailyWeeklyComparisonChartContainer" class="relative h-96"></div>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700"><h2 class="text-lg font-semibold text-white text-center mb-4">Variação de Faturamento por Supervisor</h2><div class="overflow-x-auto" style="max-height: 40vh;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Supervisor</th><th class="px-4 py-3 text-right">Média Trim.</th><th class="px-4 py-3 text-right">Fat. Mês Atual</th><th class="px-4 py-3 text-right">Variação</th></tr></thead><tbody id="supervisorComparisonTableBody" class="divide-y divide-slate-700"></tbody></table></div></div>
+                                <!-- Tabela (Comparativo) -->
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm"><h2 class="text-lg font-semibold text-white text-center mb-4">Variação de Faturamento por Supervisor</h2><div class="overflow-x-auto custom-scrollbar" style="max-height: 40vh;"><table class="min-w-full text-sm text-left text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-4 py-3">Supervisor</th><th class="px-4 py-3 text-right">Média Trim.</th><th class="px-4 py-3 text-right">Fat. Mês Atual</th><th class="px-4 py-3 text-right">Variação</th></tr></thead><tbody id="supervisorComparisonTableBody" class="divide-y divide-slate-700"></tbody></table></div></div>
                             </div>
                         </div>
+                        
+                        <!-- Ecrã Estoque -->
                         <div id="stock-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <div class="flex justify-between items-center mb-6">
-                                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Estoque</p></div>
-                                <button id="back-to-main-from-stock-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
-                            </div>
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
+                                <div class="flex justify-between items-center"><div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Estoque</p></div><button id="back-to-main-from-stock-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button></div>
+                            </header>
+                            <!-- Filtros (Estoque) -->
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
                                 <div id="stock-rede-filter-wrapper" class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
                                     <div class="relative w-full sm:w-1/2">
-                                        <label class="block mb-2 text-sm font-medium text-slate-300">Rede</label>
+                                        <label class="block mb-2 text-sm font-medium text-slate-400">Rede</label>
                                         <div id="stock-rede-group-container" class="inline-flex rounded-md shadow-sm w-full" role="group">
-                                            <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-l-lg hover:bg-slate-500 flex-1">Todos</button>
-                                            <button type="button" data-group="com_rede" id="stock-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 hover:bg-slate-500 border-t border-b border-slate-700 flex items-center justify-center gap-2 flex-1">
+                                            <button type="button" data-group="" class="group-btn active py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-l-lg hover:bg-slate-600 flex-1">Todos</button>
+                                            <button type="button" data-group="com_rede" id="stock-com-rede-btn" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border-t border-b border-slate-600 hover:bg-slate-600 flex items-center justify-center gap-2 flex-1">
                                                 <span id="stock-com-rede-btn-text">Com Rede</span>
-                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
                                             </button>
-                                            <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-white bg-slate-600 rounded-r-lg hover:bg-slate-500 flex-1">Sem Rede</button>
+                                            <button type="button" data-group="sem_rede" class="group-btn py-2 px-4 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-r-lg hover:bg-slate-600 flex-1">Sem Rede</button>
                                         </div>
-                                        <div id="stock-rede-filter-dropdown" class="hidden absolute z-20 w-full mt-1 top-full left-0 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left"></div>
+                                        <div id="stock-rede-filter-dropdown" class="hidden absolute z-20 w-full mt-1 top-full left-0 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-left text-white"></div>
                                     </div>
                                     <div class="w-full sm:w-1/2">
-                                        <label class="block mb-2 text-sm font-medium text-slate-300">Pasta</label>
+                                        <label class="block mb-2 text-sm font-medium text-slate-400">Pasta</label>
                                         <div id="stock-fornecedor-toggle-container" class="w-full rounded-lg p-1 flex justify-center gap-2">
-                                            <button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1">PEPSICO</button>
-                                            <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg flex-1">MULTIMARCAS</button>
+                                            <button data-fornecedor="PEPSICO" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1">PEPSICO</button>
+                                            <button data-fornecedor="MULTIMARCAS" class="fornecedor-btn bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold py-2 px-4 rounded-lg flex-1">MULTIMARCAS</button>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                                    <div>
-                                        <label for="stock-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
-                                        <select id="stock-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
-                                            <option value="">Todos</option>
-                                        </select>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="stock-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label>
-                                        <button id="stock-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="stock-vendedor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="stock-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="stock-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Fornecedor</label>
-                                        <button id="stock-supplier-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="stock-supplier-filter-text">Todos Fornecedores</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="stock-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="stock-city-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label>
-                                        <input type="text" id="stock-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white" autocomplete="off">
-                                        <div id="stock-city-suggestions" class="absolute z-10 w-full bg-slate-700 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
+                                    <div><label for="stock-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="stock-supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                                    <div class="relative"><label for="stock-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="stock-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="stock-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="stock-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                    <div class="relative"><label for="stock-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><button id="stock-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="stock-supplier-filter-text">Todos Fornecedores</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="stock-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                    <div class="relative"><label for="stock-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="stock-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="stock-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                                     <div class="lg:col-span-2 relative">
-                                        <label for="stock-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Produto</label>
-                                        <button id="stock-product-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="stock-product-filter-text">Todos os Produtos</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="stock-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg">
-                                            <div class="p-2 border-b border-slate-600">
-                                                <input type="text" id="stock-product-search-input" placeholder="Buscar produto..." class="bg-slate-800 text-xs rounded-lg block w-full p-2 border border-slate-600 text-white">
-                                            </div>
-                                            <div id="stock-product-list" class="max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                        <label for="stock-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Produto</label>
+                                        <button id="stock-product-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="stock-product-filter-text">Todos os Produtos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button>
+                                        <div id="stock-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg">
+                                            <div class="p-2 border-b border-slate-700"><input type="text" id="stock-product-search-input" placeholder="Buscar produto..." class="bg-slate-600 text-xs rounded-lg block w-full p-2 border border-slate-500 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"></div>
+                                            <div id="stock-product-list" class="max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
                                         </div>
                                     </div>
-                                    <div>
-                                        <label for="stock-filial-filter" class="block mb-2 text-sm font-medium text-slate-300">Filial</label>
-                                        <select id="stock-filial-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
-                                            <option value="ambas" selected>Ambas</option>
-                                            <option value="05">Filial 05</option>
-                                            <option value="08">Filial 08</option>
-                                        </select>
-                                    </div>
-                                    <button id="clear-stock-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+                                    <div><label for="stock-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="stock-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
+                                    <button id="clear-stock-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
                                 </div>
                             </div>
-                             <div class="bg-[#1d2347] p-4 rounded-lg mb-6 border border-slate-700">
+                            <!-- Tabela Principal (Estoque) -->
+                             <div class="bg-[#1d2347] p-4 rounded-lg mb-6 border border-slate-700 shadow-sm">
                                 <div class="flex justify-between items-center mb-4">
                                     <h2 class="text-lg font-semibold text-white">Análise de Estoque e Tendência de Saída</h2>
                                     <div class="flex items-end gap-4">
                                         <div>
-                                            <label for="stock-working-days-input" class="block text-xs font-medium text-slate-400 mb-1 text-center">Dias Úteis</label>
+                                            <label for="stock-working-days-input" class="block text-xs font-medium text-slate-400 mb-1 text-center">Dias Úteis</la bel>
                                             <div class="flex items-center justify-center gap-1">
-                                                <input type="number" id="stock-working-days-input" value="0" min="1" class="bg-slate-700 text-sm rounded-lg block w-20 p-1.5 border border-slate-600 text-white text-center">
-                                                <span id="max-working-days-label" class="text-xs text-slate-500 whitespace-nowrap">(Máx: 0)</span>
+                                                <input type="number" id="stock-working-days-input" value="0" min="1" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg block w-20 p-1.5 text-center focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                                <span id="max-working-days-label" class="text-xs text-slate-400 whitespace-nowrap">(Máx: 0)</span>
                                             </div>
                                         </div>
                                         <div id="stock-trend-filter-container" class="flex items-center gap-2">
@@ -5476,8 +5645,8 @@
                                     </div>
                                 </div>
                                 <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
-                                    <table class="min-w-full text-sm text-left">
-                                        <thead class="text-xs text-slate-300 uppercase sticky-header">
+                                    <table class="min-w-full text-sm text-left text-slate-300">
+                                        <thead class="text-xs text-slate-400 uppercase sticky-header">
                                             <tr>
                                                 <th class="px-4 py-3">Produto</th>
                                                 <th class="px-4 py-3">Fornecedor</th>
@@ -5491,404 +5660,265 @@
                                     </table>
                                 </div>
                             </div>
+                            <!-- Tabelas Secundárias (Estoque) -->
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
                                     <h2 class="text-lg font-semibold text-white text-center mb-4">Produtos com Crescimento</h2>
                                     <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
-                                        <table class="min-w-full text-sm">
-                                            <thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Variação</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead>
-                                            <tbody id="growth-table-body" class="divide-y divide-slate-700"></tbody>
-                                        </table>
+                                        <table class="min-w-full text-sm text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Variação</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead><tbody id="growth-table-body" class="divide-y divide-slate-700"></tbody></table>
                                     </div>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
                                     <h2 class="text-lg font-semibold text-white text-center mb-4">Produtos com Queda</h2>
                                     <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
-                                        <table class="min-w-full text-sm">
-                                            <thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Variação</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead>
-                                            <tbody id="decline-table-body" class="divide-y divide-slate-700"></tbody>
-                                        </table>
+                                        <table class="min-w-full text-sm text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Variação</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead><tbody id="decline-table-body" class="divide-y divide-slate-700"></tbody></table>
                                     </div>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
                                     <h2 class="text-lg font-semibold text-white text-center mb-4">Novos - Vendidos este Mês</h2>
                                     <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
-                                        <table class="min-w-full text-sm">
-                                            <thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead>
-                                            <tbody id="new-products-table-body" class="divide-y divide-slate-700"></tbody>
-                                        </table>
+                                        <table class="min-w-full text-sm text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead><tbody id="new-products-table-body" class="divide-y divide-slate-700"></tbody></table>
                                     </div>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                                <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
                                     <h2 class="text-lg font-semibold text-white text-center mb-4">Perdidos - Não vendidos este Mês</h2>
                                     <div class="overflow-auto custom-scrollbar" style="max-height: 40vh;">
-                                        <table class="min-w-full text-sm">
-                                            <thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead>
-                                            <tbody id="lost-products-table-body" class="divide-y divide-slate-700"></tbody>
-                                        </table>
+                                        <table class="min-w-full text-sm text-slate-300"><thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-2 py-2 text-left">Produto</th><th class="px-2 py-2 text-right">Vendido (Atual)</th><th class="px-2 py-2 text-right">Média Trim.</th><th class="px-2 py-2 text-right">Estoque</th></tr></thead><tbody id="lost-products-table-body" class="divide-y divide-slate-700"></tbody></table>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
+                        <!-- Ecrã Inovações -->
                         <div id="innovations-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <div class="flex justify-between items-center mb-6">
-                                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Inovações</p></div>
-                                <div class="flex gap-4">
-                                    <button id="innovations-month-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Inovações Mês</button>
-                                    <button id="back-to-main-from-innovations-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
+                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
+                                <div class="flex justify-between items-center">
+                                    <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Inovações</p></div>
+                                    <div class="flex gap-4">
+                                        <button id="innovations-month-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg">Inovações Mês</button>
+                                        <button id="back-to-main-from-innovations-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
+                                    </div>
                                 </div>
-                            </div>
-
+                            </header>
+                            <!-- KPIs (Inovações) -->
                              <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                <div class="kpi-card">
                                     <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p>
                                     <p id="innovations-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p>
                                     <p class="text-xs text-slate-500">Base para os KPIs</p>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                <div class="kpi-card">
                                     <p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p>
                                     <p id="innovations-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
                                     <p id="innovations-selection-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                <div class="kpi-card">
                                     <p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p>
                                     <p id="innovations-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
                                     <p id="innovations-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                <div class="kpi-card">
                                     <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Ant.</p>
                                     <p id="innovations-bonus-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
                                     <p id="innovations-bonus-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                <div class="kpi-card">
                                     <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Atual</p>
                                     <p id="innovations-bonus-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
                                     <p id="innovations-bonus-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                <div class="kpi-card">
                                     <p id="innovations-top-coverage-title" class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p>
                                     <p id="innovations-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p>
                                     <p id="innovations-top-coverage-product-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p>
                                     <p id="innovations-top-coverage-count-kpi" class="text-xs text-slate-500">0 PDVs</p>
                                 </div>
                             </div>
-
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                            <!-- Filtros (Inovações) -->
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
-                                    <div>
-                                        <label for="innovations-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
-                                        <select id="innovations-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white">
-                                            <option value="">Todos</option>
-                                        </select>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="innovations-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label>
-                                        <button id="innovations-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="innovations-vendedor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="innovations-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="innovations-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Fornecedor</label>
-                                        <button id="innovations-supplier-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="innovations-supplier-filter-text">Todos</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="innovations-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="innovations-city-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label>
-                                        <input type="text" id="innovations-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white" autocomplete="off">
-                                        <div id="innovations-city-suggestions" class="absolute z-10 w-full bg-slate-700 border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
-                                     <div>
-                                        <label for="innovations-filial-filter" class="block mb-2 text-sm font-medium text-slate-300">Filial</label>
-                                        <select id="innovations-filial-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
-                                            <option value="ambas" selected>Ambas</option>
-                                            <option value="05">Filial 05</option>
-                                            <option value="08">Filial 08</option>
-                                        </select>
-                                    </div>
+                                    <div><label for="innovations-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="innovations-supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                                    <div class="relative"><label for="innovations-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="innovations-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="innovations-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="innovations-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                    <div class="relative"><label for="innovations-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</label><button id="innovations-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="innovations-supplier-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="innovations-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                    <div class="relative"><label for="innovations-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="innovations-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="innovations-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                    <div><label for="innovations-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="innovations-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                                     <div class="lg:col-span-2 relative">
-                                        <label for="innovations-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Produto (Obrigatório)</label>
-                                        <button id="innovations-product-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="innovations-product-filter-text">Selecione um ou mais produtos</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="innovations-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg">
-                                            <div class="p-2 border-b border-slate-600"><input type="text" id="innovations-product-search-input" placeholder="Buscar produto..." class="bg-slate-800 text-xs rounded-lg block w-full p-2 border border-slate-600 text-white"></div>
-                                            <div id="innovations-product-list" class="max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                        <label for="innovations-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Produto (Obrigatório)</label>
+                                        <button id="innovations-product-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="innovations-product-filter-text">Selecione um ou mais produtos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button>
+                                        <div id="innovations-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg">
+                                            <div class="p-2 border-b border-slate-700"><input type="text" id="innovations-product-search-input" placeholder="Buscar produto..." class="bg-slate-600 text-xs rounded-lg block w-full p-2 border border-slate-500 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"></div>
+                                            <div id="innovations-product-list" class="max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
                                         </div>
                                     </div>
-                                     <div class="flex items-center justify-start h-full pb-1">
-                                        <div class="flex items-center">
-                                            <input id="innovations-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2">
-                                            <label for="innovations-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label>
-                                        </div>
-                                    </div>
-                                    <button id="clear-innovations-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+                                    <div class="flex items-center justify-start h-full pb-1"><div class="flex items-center"><input id="innovations-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-500 bg-slate-600 border-slate-500 rounded focus:ring-teal-500"><label for="innovations-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label></div></div>
+                                    <button id="clear-innovations-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
                                 </div>
                             </div>
-
-                            <div id="innovations-table-container" class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
-                                <div id="innovations-placeholder" class="text-center py-16">
-                                    <p class="text-slate-500 text-lg">Aguardando filtro de produtos...</p>
-                                </div>
+                            <!-- Tabela (Inovações) -->
+                            <div id="innovations-table-container" class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
+                                <div id="innovations-placeholder" class="text-center py-16"><p class="text-slate-400 text-lg">Aguardando filtro de produtos...</p></div>
                                 <div id="innovations-results" class="hidden overflow-auto custom-scrollbar" style="max-height: 60vh;">
-                                    <table class="min-w-full text-sm text-left">
-                                        <thead class="text-xs text-slate-300 uppercase sticky-header">
-                                            <tr>
-                                                <th class="px-2 py-2">PRODUTO</th>
-                                                <th class="px-2 py-2 text-right">ESTOQUE CAIXAS</th>
-                                                <th class="px-2 py-2 text-right">COBERTURA MÊS ANT.</th>
-                                                <th class="px-2 py-2 text-right">COBERTURA MÊS ATUAL</th>
-                                                <th class="px-2 py-2 text-right">VARIAÇÃO</th>
-                                            </tr>
+                                    <table class="min-w-full text-sm text-left text-slate-300">
+                                        <thead class="text-xs text-slate-400 uppercase sticky-header">
+                                            <tr><th class="px-2 py-2">PRODUTO</th><th class="px-2 py-2 text-right">ESTOQUE CAIXAS</th><th class="px-2 py-2 text-right">COBERTURA MÊS ANT.</th><th class="px-2 py-2 text-right">COBERTURA MÊS ATUAL</th><th class="px-2 py-2 text-right">VARIAÇÃO</th></tr>
                                         </thead>
                                         <tbody id="innovations-table-body" class="divide-y divide-slate-700"></tbody>
                                     </table>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Ecrã Inovações Mês -->
                         <div id="innovations-month-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <div class="flex justify-between items-center mb-6">
-                                <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Gráfico de Cobertura por Categoria de Inovação</p></div>
-                                <div class="flex gap-4">
-                                    <button id="export-innovations-month-pdf-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Exportar PDF</button>
-                                    <button id="back-to-innovations-from-month-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar</button>
+                             <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
+                                <div class="flex justify-between items-center">
+                                    <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Gráfico de Cobertura por Categoria de Inovação</p></div>
+                                    <div class="flex gap-4">
+                                        <button id="export-innovations-month-pdf-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Exportar PDF</button>
+                                        <button id="back-to-innovations-from-month-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar</button>
+                                    </div>
                                 </div>
-                            </div>
+                            </header>
                              <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-6">
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
-                                    <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p>
-                                    <p id="innovations-month-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p>
-                                    <p class="text-xs text-slate-500">Base para os KPIs</p>
-                                </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
-                                    <p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p>
-                                    <p id="innovations-month-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
-                                    <p id="innovations-month-selection-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
-                                </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
-                                    <p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p>
-                                    <p id="innovations-month-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
-                                    <p id="innovations-month-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
-                                </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
-                                    <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Ant.</p>
-                                    <p id="innovations-month-bonus-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
-                                    <p id="innovations-month-bonus-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
-                                </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
-                                    <p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Atual</p>
-                                    <p id="innovations-month-bonus-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
-                                    <p id="innovations-month-bonus-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
-                                </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
-                                    <p id="innovations-month-top-coverage-title" class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p>
-                                    <p id="innovations-month-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p>
-                                    <p id="innovations-month-top-coverage-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p>
-                                    <p id="innovations-month-top-coverage-count-kpi" class="text-xs text-slate-500">0 PDVs</p>
-                                </div>
+                                <div class="kpi-card"><p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p><p id="innovations-month-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p><p class="text-xs text-slate-500">Base para os KPIs</p></div>
+                                <div class="kpi-card"><p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p><p id="innovations-month-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p><p id="innovations-month-selection-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p></div>
+                                <div class="kpi-card"><p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p><p id="innovations-month-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p><p id="innovations-month-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p></div>
+                                <div class="kpi-card"><p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Ant.</p><p id="innovations-month-bonus-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p><p id="innovations-month-bonus-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p></div>
+                                <div class="kpi-card"><p class="text-slate-400 text-sm font-medium">Cobertura Bonificação Atual</p><p id="innovations-month-bonus-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p><p id="innovations-month-bonus-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p></div>
+                                <div class="kpi-card"><p id="innovations-month-top-coverage-title" class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p><p id="innovations-month-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p><p id="innovations-month-top-coverage-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p><p id="innovations-month-top-coverage-count-kpi" class="text-xs text-slate-500">0 PDVs</p></div>
                             </div>
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
-                                    <div>
-                                        <label for="innovations-month-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
-                                        <select id="innovations-month-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white">
-                                            <option value="">Todos</option>
-                                        </select>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="innovations-month-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label>
-                                        <button id="innovations-month-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="innovations-month-vendedor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="innovations-month-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="innovations-month-city-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label>
-                                        <input type="text" id="innovations-month-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white" autocomplete="off">
-                                        <div id="innovations-month-city-suggestions" class="absolute z-10 w-full bg-slate-700 border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
-                                     <div>
-                                        <label for="innovations-month-filial-filter" class="block mb-2 text-sm font-medium text-slate-300">Filial</label>
-                                        <select id="innovations-month-filial-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
-                                            <option value="ambas" selected>Ambas</option>
-                                            <option value="05">Filial 05</option>
-                                            <option value="08">Filial 08</option>
-                                        </select>
-                                    </div>
-                                     <div class="flex items-center justify-start h-full pb-1">
-                                        <div class="flex items-center">
-                                            <input id="innovations-month-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2">
-                                            <label for="innovations-month-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label>
-                                        </div>
-                                    </div>
-                                    <button id="clear-innovations-month-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+                                    <div><label for="innovations-month-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="innovations-month-supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                                    <div class="relative"><label for="innovations-month-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="innovations-month-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="innovations-month-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="innovations-month-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                    <div class="relative"><label for="innovations-month-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="innovations-month-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="innovations-month-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                    <div><label for="innovations-month-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="innovations-month-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
+                                    <div class="flex items-center justify-start h-full pb-1"><div class="flex items-center"><input id="innovations-month-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-500 bg-slate-600 border-slate-500 rounded focus:ring-teal-500"><label for="innovations-month-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label></div></div>
+                                    <button id="clear-innovations-month-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
                                 </div>
                                 <div class="mt-4 border-t border-slate-700 pt-4">
-                                    <label for="innovations-month-category-filter" class="block mb-2 text-sm font-medium text-slate-300">Filtrar por Categoria de Inovação</label>
-                                    <select id="innovations-month-category-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
-                                        <option value="">Todas as Categorias</option>
-                                    </select>
+                                    <label for="innovations-month-category-filter" class="block mb-2 text-sm font-medium text-slate-400">Filtrar por Categoria de Inovação</label>
+                                    <select id="innovations-month-category-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todas as Categorias</option></select>
                                 </div>
                             </div>
-                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 mb-6">
+                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm mb-6">
                                 <div id="innovations-month-chartContainer" class="relative h-96"></div>
                             </div>
-                             <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 mb-6">
+                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm mb-6">
                                 <h2 class="text-lg font-semibold text-white mb-4 text-center">Dados do Gráfico</h2>
                                 <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
-                                    <table class="min-w-full text-sm text-left">
-                                        <thead class="text-xs text-slate-300 uppercase sticky-header">
-                                            <tr>
-                                                <th class="px-2 py-2">CATEGORIA</th>
-                                                <th class="px-2 py-2">PRODUTO</th>
-                                                <th class="px-2 py-2 text-right">ESTOQUE CAIXAS</th>
-                                                <th class="px-2 py-2 text-right">COBERTURA MÊS ANT.</th>
-                                                <th class="px-2 py-2 text-right">COBERTURA MÊS ATUAL</th>
-                                                <th class="px-2 py-2 text-right">VARIAÇÃO</th>
-                                            </tr>
-                                        </thead>
+                                    <table class="min-w-full text-sm text-left text-slate-300">
+                                        <thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-2 py-2">CATEGORIA</th><th class="px-2 py-2">PRODUTO</th><th class="px-2 py-2 text-right">ESTOQUE CAIXAS</th><th class="px-2 py-2 text-right">COBERTURA MÊS ANT.</th><th class="px-2 py-2 text-right">COBERTURA MÊS ATUAL</th><th class="px-2 py-2 text-right">VARIAÇÃO</th></tr></thead>
                                         <tbody id="innovations-month-table-body" class="divide-y divide-slate-700"></tbody>
                                     </table>
                                 </div>
                             </div>
-                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                            <div class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
                                 <h2 class="text-lg font-semibold text-white mb-2 text-center">Inovações por cliente</h2>
                                 <div id="innovations-by-client-legend" class="text-xs text-slate-400 mb-4 p-2 bg-slate-800 rounded"></div>
                                 <div class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
-                                    <table class="min-w-full text-sm text-left">
-                                        <thead id="innovations-by-client-table-head" class="text-xs text-slate-300 uppercase sticky-header">
-                                        </thead>
+                                    <table class="min-w-full text-sm text-left text-slate-300">
+                                        <thead id="innovations-by-client-table-head" class="text-xs text-slate-400 uppercase sticky-header"></thead>
                                         <tbody id="innovations-by-client-table-body" class="divide-y divide-slate-700"></tbody>
                                     </table>
                                 </div>
                             </div>
                         </div>
 
+                        <!-- Ecrã Cobertura (Novo) -->
                         <div id="coverage-view" class="hidden container mx-auto p-4 sm:p-6 lg:p-8">
-                            <div class="flex justify-between items-center mb-6">
-                                <div>
-                                    <h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-400">PRIME</span> DISTRIBUIÇÃO</h1>
-                                    <p class="text-lg text-slate-300 -mt-1">Análise de Cobertura (Estoque x PDVs)</p>
+                            <header class="mb-6 -mt-4 -mx-4 sm:-mt-6 sm:-mx-6 lg:-mt-8 lg:-mx-8 p-6 bg-gradient-to-r from-[#1e2a5a] to-[#0d1126] rounded-b-lg shadow-lg">
+                                <div class="flex justify-between items-center">
+                                    <div><h1 class="text-2xl font-bold text-white">PAINEL DE VENDAS - <span class="text-yellow-300">PRIME</span> DISTRIBUIÇÃO</h1><p class="text-lg text-slate-300 -mt-1">Análise de Cobertura (Estoque x PDVs)</p></div>
+                                    <button id="back-to-main-from-coverage-btn" class="bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
                                 </div>
-                                <button id="back-to-main-from-coverage-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Voltar ao Dashboard</button>
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-6">
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                            </header>
+                            <!-- KPIs (Cobertura) -->
+                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                                <div class="kpi-card">
                                     <p class="text-slate-400 text-sm font-medium">Clientes Ativos (Filtro)</p>
                                     <p id="coverage-active-clients-kpi" class="text-3xl font-bold text-teal-400 my-1">0</p>
                                     <p class="text-xs text-slate-500">Base para os KPIs</p>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                <div class="kpi-card">
                                     <p class="text-slate-400 text-sm font-medium">Cobertura Mês Anterior</p>
                                     <p id="coverage-selection-coverage-value-kpi-previous" class="text-3xl font-bold text-orange-400 my-1">0%</p>
                                     <p id="coverage-selection-coverage-count-kpi-previous" class="text-xs text-slate-500">0 de 0 clientes</p>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                <div class="kpi-card">
                                     <p class="text-slate-400 text-sm font-medium">Cobertura Mês Atual</p>
                                     <p id="coverage-selection-coverage-value-kpi" class="text-3xl font-bold text-cyan-400 my-1">0%</p>
                                     <p id="coverage-selection-coverage-count-kpi" class="text-xs text-slate-500">0 de 0 clientes</p>
                                 </div>
-                                <div class="bg-[#1d2347] p-4 rounded-lg text-center border border-slate-700">
+                                <div class="kpi-card">
                                     <p class="text-slate-400 text-sm font-medium">Item com Maior Cobertura</p>
                                     <p id="coverage-top-coverage-value-kpi" class="text-3xl font-bold text-purple-400 my-1">0%</p>
                                     <p id="coverage-top-coverage-product-kpi" class="text-xs text-slate-500 truncate" title="Nenhum item analisado">-</p>
                                 </div>
                             </div>
-
-                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-md border border-slate-700">
+                            <!-- Filtros (Cobertura) -->
+                            <div class="mb-6 p-4 bg-[#1d2347] rounded-lg shadow-sm border border-slate-700">
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
-                                    <div>
-                                        <label for="coverage-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-300">Supervisor</label>
-                                        <select id="coverage-supervisor-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white">
-                                            <option value="">Todos</option>
-                                        </select>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="coverage-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Vendedor</label>
-                                        <button id="coverage-vendedor-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="coverage-vendedor-filter-text">Todos</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="coverage-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="coverage-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Fornecedor</label>
-                                        <button id="coverage-supplier-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="coverage-supplier-filter-text">Todos</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="coverage-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
-                                    <div class="relative">
-                                        <label for="coverage-city-filter" class="block mb-2 text-sm font-medium text-slate-300">Cidade</label>
-                                        <input type="text" id="coverage-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 text-white" autocomplete="off">
-                                        <div id="coverage-city-suggestions" class="absolute z-10 w-full bg-slate-700 border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar"></div>
-                                    </div>
-                                     <div>
-                                        <label for="coverage-filial-filter" class="block mb-2 text-sm font-medium text-slate-300">Filial</label>
-                                        <select id="coverage-filial-filter" class="bg-slate-700 text-sm rounded-lg block w-full p-2.5 border border-slate-600 placeholder-slate-400 text-white">
-                                            <option value="ambas" selected>Ambas</option>
-                                            <option value="05">Filial 05</option>
-                                            <option value="08">Filial 08</option>
-                                        </select>
-                                    </div>
+                                    <div><label for="coverage-supervisor-filter" class="block mb-2 text-sm font-medium text-slate-400">Supervisor</label><select id="coverage-supervisor-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="">Todos</option></select></div>
+                                    <div class="relative"><label for="coverage-vendedor-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Vendedor</label><button id="coverage-vendedor-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="coverage-vendedor-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="coverage-vendedor-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                    <div class="relative"><label for="coverage-supplier-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Fornecedor</LabeL><button id="coverage-supplier-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="coverage-supplier-filter-text">Todos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button><div id="coverage-supplier-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                    <div class="relative"><label for="coverage-city-filter" class="block mb-2 text-sm font-medium text-slate-400">Cidade</label><input type="text" id="coverage-city-filter" placeholder="Digite a cidade..." class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5" autocomplete="off"><div id="coverage-city-suggestions" class="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-lg mt-1 hidden max-h-48 overflow-y-auto custom-scrollbar text-white"></div></div>
+                                    <div><label for="coverage-filial-filter" class="block mb-2 text-sm font-medium text-slate-400">Filial</label><select id="coverage-filial-filter" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 block w-full p-2.5"><option value="ambas" selected>Ambas</option><option value="05">Filial 05</option><option value="08">Filial 08</option></select></div>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                                     <div class="lg:col-span-2 relative">
-                                        <label for="coverage-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-300">Produto</label>
-                                        <button id="coverage-product-filter-btn" class="w-full bg-slate-700 text-sm rounded-lg p-2.5 border border-slate-600 text-white text-left flex justify-between items-center">
-                                            <span id="coverage-product-filter-text">Todos os Produtos</span>
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg>
-                                        </button>
-                                        <div id="coverage-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-lg">
-                                            <div class="p-2 border-b border-slate-600"><input type="text" id="coverage-product-search-input" placeholder="Buscar produto..." class="bg-slate-800 text-xs rounded-lg block w-full p-2 border border-slate-600 text-white"></div>
-                                            <div id="coverage-product-list" class="max-h-60 overflow-y-auto custom-scrollbar"></div>
+                                        <label for="coverage-product-filter-btn" class="block mb-2 text-sm font-medium text-slate-400">Produto</label>
+                                        <button id="coverage-product-filter-btn" class="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg p-2.5 text-left flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-teal-500"><span id="coverage-product-filter-text">Todos os Produtos</span><svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path></svg></button>
+                                        <div id="coverage-product-filter-dropdown" class="hidden absolute z-20 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg">
+                                            <div class="p-2 border-b border-slate-700"><input type="text" id="coverage-product-search-input" placeholder="Buscar produto..." class="bg-slate-600 text-xs rounded-lg block w-full p-2 border border-slate-500 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-teal-500"></div>
+                                            <div id="coverage-product-list" class="max-h-60 overflow-y-auto custom-scrollbar text-white"></div>
                                         </div>
                                     </div>
-                                     <div class="flex items-center justify-start h-full pb-1">
-                                        <div class="flex items-center">
-                                            <input id="coverage-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-600 bg-slate-700 border-slate-600 rounded focus:ring-teal-600 ring-offset-slate-800 focus:ring-2">
-                                            <label for="coverage-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label>
-                                        </div>
-                                    </div>
-                                    <button id="clear-coverage-filters-btn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
+                                    <div class="flex items-center justify-start h-full pb-1"><div class="flex items-center"><input id="coverage-include-bonus" type="checkbox" checked class="w-4 h-4 text-teal-500 bg-slate-600 border-slate-500 rounded focus:ring-teal-500"><label for="coverage-include-bonus" class="ml-2 text-sm font-medium text-slate-300">Incluir Bonificações</label></div></div>
+                                    <button id="clear-coverage-filters-btn" class="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-2.5 px-4 rounded-lg">Limpar Filtros</button>
                                 </div>
                             </div>
-
-                            <div id="coverage-table-container" class="bg-[#1d2347] p-4 rounded-lg border border-slate-700">
+                            <!-- Tabela (Cobertura) -->
+                            <div id="coverage-table-container" class="bg-[#1d2347] p-4 rounded-lg border border-slate-700 shadow-sm">
                                 <div id="coverage-results" class="overflow-auto custom-scrollbar" style="max-height: 60vh;">
-                                    <table class="min-w-full text-sm text-left">
-                                        <thead class="text-xs text-slate-300 uppercase sticky-header">
-                                            <tr>
-                                                <th class="px-2 py-2">PRODUTO</th>
-                                                <th class="px-2 py-2 text-right">ESTOQUE (Cx)</th>
-                                                <th class="px-2 py-2 text-right">COB. ESTOQUE (Dias)</th>
-                                                <th class="px-2 py-2 text-right">PDVs MÊS ANT.</th>
-                                                <th class="px-2 py-2 text-right">PDVs MÊS ATUAL</th>
-                                                <th class="px-2 py-2 text-right">COB. PDVs (%)</th>
-                                            </tr>
+                                    <table class="min-w-full text-sm text-left text-slate-300">
+                                        <thead class="text-xs text-slate-400 uppercase sticky-header">
+                                            <tr><th class="px-2 py-2">PRODUTO</th><th class="px-2 py-2 text-right">ESTOQUE (Cx)</th><th class="px-2 py-2 text-right">COB. ESTOQUE (Dias)</th><th class="px-2 py-2 text-right">PDVs MÊS ANT.</th><th class="px-2 py-2 text-right">PDVs MÊS ATUAL</th><th class="px-2 py-2 text-right">COB. PDVs (%)</th></tr>
                                         </thead>
-                                        <tbody id="coverage-table-body" class="divide-y divide-slate-700">
-                                        </tbody>
+                                        <tbody id="coverage-table-body" class="divide-y divide-slate-700"></tbody>
                                     </table>
                                 </div>
                             </div>
                         </div>
 
-                        <div id="order-details-modal" class="modal-overlay hidden"><div class="bg-slate-800 rounded-lg shadow-2xl max-w-4xl w-full m-4"><div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Detalhes do Pedido <span id="modal-pedido-id"></span></h2><button id="modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button></div><div id="modal-header-info" class="p-6 text-left grid grid-cols-2 md:grid-cols-3 gap-4 text-sm"></div><div class="custom-scrollbar" style="max-height: 50vh; overflow-y: auto;"><table class="min-w-full text-sm text-left"><thead class="text-xs text-slate-300 uppercase sticky-header"><tr><th class="px-4 py-3">Produto</th><th class="px-4 py-3 text-right">Quantidade</th><th class="px-4 py-3 text-right">Peso (Kg)</th><th class="px-4 py-3 text-right">Valor Unitário</th></tr></thead><tbody id="modal-table-body" class="divide-y divide-slate-700"></tbody></table></div><div id="modal-footer-total" class="p-6 border-t border-slate-700 flex justify-between items-center"></div></div></div>
-                        <div id="client-details-modal" class="modal-overlay hidden"><div class="bg-slate-800 rounded-lg shadow-2xl max-w-2xl w-full m-4"><div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Resumo Cadastral</h2><button id="client-modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button></div><div id="client-modal-content" class="p-6"></div></div></div>
+                        <!-- Modal Detalhes do Pedido -->
+                        <div id="order-details-modal" class="modal-overlay hidden">
+                            <div class="bg-slate-800 rounded-lg shadow-2xl max-w-4xl w-full m-4 border border-slate-700">
+                                <div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Detalhes do Pedido <span id="modal-pedido-id"></span></h2><button id="modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button></div>
+                                <div id="modal-header-info" class="p-6 text-left grid grid-cols-2 md:grid-cols-3 gap-4 text-sm text-slate-300"></div>
+                                <div class="custom-scrollbar" style="max-height: 50vh; overflow-y: auto;">
+                                    <table class="min-w-full text-sm text-left text-slate-300">
+                                        <thead class="text-xs text-slate-400 uppercase sticky-header"><tr><th class="px-4 py-3">Produto</th><th class="px-4 py-3 text-right">Quantidade</th><th class="px-4 py-3 text-right">Peso (Kg)</th><th class="px-4 py-3 text-right">Valor Unitário</th></tr></thead>
+                                        <tbody id="modal-table-body" class="divide-y divide-slate-700"></tbody>
+                                    </table>
+                                </div>
+                                <div id="modal-footer-total" class="p-6 border-t border-slate-700 flex justify-between items-center"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Modal Detalhes do Cliente -->
+                        <div id="client-details-modal" class="modal-overlay hidden">
+                            <div class="bg-slate-800 rounded-lg shadow-2xl max-w-2xl w-full m-4 border border-slate-700">
+                                <div class="p-6 border-b border-slate-700 flex justify-between items-center"><h2 class="text-xl font-bold text-white">Resumo Cadastral</h2><button id="client-modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button></div>
+                                <div id="client-modal-content" class="p-6 text-slate-300"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Modal Feriados -->
                         <div id="holiday-modal" class="modal-overlay hidden">
-                            <div class="bg-slate-800 rounded-lg shadow-2xl max-w-xs w-full m-4">
+                            <div class="bg-slate-800 rounded-lg shadow-2xl max-w-xs w-full m-4 text-slate-300 border border-slate-700">
                                 <div class="p-4 border-b border-slate-700 flex justify-between items-center">
                                     <h2 class="text-lg font-bold text-white">Selecionar Feriados</h2>
                                     <button id="holiday-modal-close-btn" class="text-slate-400 hover:text-white text-3xl">&times;</button>
@@ -5897,10 +5927,11 @@
                                     <div id="calendar-container"></div>
                                 </div>
                                 <div class="p-4 border-t border-slate-700 text-right">
-                                    <button id="holiday-modal-done-btn" class="bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Confirmar</button>
+                                    <button id="holiday-modal-done-btn" class="bg-teal-500 hover:bg-teal-400 text-white font-bold py-2 px-4 rounded-lg">Confirmar</button>
                                 </div>
                             </div>
                         </div>
+                        
                         <script>
                             const embeddedData = ${jsonDataString};
                             document.addEventListener('DOMContentLoaded', () => {
@@ -5910,6 +5941,7 @@
                     </body>
                     </html>
                 `;
+                // FIM DO TEMPLATE MODIFICADO
 
                 const blob = new Blob([reportTemplate], { type: 'text/html' });
                 downloadLink.href = URL.createObjectURL(blob);
